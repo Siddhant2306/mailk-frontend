@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../Screens/login.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -192,7 +193,10 @@ class _SplashScreenState extends State<SplashScreen>
                 height: 52,
                 child: ElevatedButton(
                   onPressed: () {
-                    // Navigate to login/home later
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const LoginScreen()),
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFFB21A),
