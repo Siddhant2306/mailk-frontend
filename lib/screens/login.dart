@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../Screens/home.dart';
+
+import 'home.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -30,16 +31,11 @@ class _LoginScreenState extends State<LoginScreen> {
         children: [
           // LOGIN BACKGROUND
           Positioned.fill(
-            child: Image.asset(
-              'assets/login_bg.png',
-              fit: BoxFit.cover,
-            ),
+            child: Image.asset('assets/login_bg.png', fit: BoxFit.cover),
           ),
 
           // DARK OVERLAY
-          Container(
-            color: Colors.black.withOpacity(0.30),
-          ),
+          Container(color: Colors.black.withValues(alpha: 0.30)),
 
           SafeArea(
             child: LayoutBuilder(
@@ -67,7 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   height: 120,
                                   fit: BoxFit.contain,
                                 ),
-                               // const SizedBox(height: 2),
+                                // const SizedBox(height: 2),
                                 const Text(
                                   'M A L I K',
                                   style: TextStyle(
@@ -178,19 +174,19 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: ElevatedButton(
                               onPressed: () {
                                 //TODO: Implement login functionality here.
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => const HomeScreen(),
-                                    ),
-                                  );
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const HomeScreen(),
+                                  ),
+                                );
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFFFFB21A),
                                 foregroundColor: Colors.black,
                                 elevation: 8,
-                                shadowColor:
-                                    const Color(0xFFFFB21A).withOpacity(0.35),
+                                shadowColor: const Color(0xFFFFB21A)
+                                    .withValues(alpha: 0.35),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(9),
                                 ),
@@ -207,10 +203,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                   SizedBox(width: 9),
-                                  Icon(
-                                    Icons.arrow_forward,
-                                    size: 15,
-                                  ),
+                                  Icon(Icons.arrow_forward, size: 15),
                                 ],
                               ),
                             ),
@@ -228,8 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               const Padding(
-                                padding:
-                                    EdgeInsets.symmetric(horizontal: 12),
+                                padding: EdgeInsets.symmetric(horizontal: 12),
                                 child: Text(
                                   'OR',
                                   style: TextStyle(
@@ -261,8 +253,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 side: const BorderSide(
                                   color: Color(0xFF202A35),
                                 ),
-                                backgroundColor:
-                                    const Color(0xFF080D13).withOpacity(0.55),
+                                backgroundColor: const Color(0xFF080D13)
+                                    .withValues(alpha: 0.55),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
@@ -271,10 +263,10 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                 Image(
-                                  image:AssetImage('assets/google.png'), 
-                                  width: 20, 
-                                  height: 20,
+                                  Image(
+                                    image: AssetImage('assets/google.png'),
+                                    width: 20,
+                                    height: 20,
                                   ),
                                   const SizedBox(width: 8),
                                   const Text(
@@ -348,45 +340,27 @@ class _LoginScreenState extends State<LoginScreen> {
       child: TextField(
         controller: controller,
         obscureText: obscureText,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 15,
-        ),
+        style: const TextStyle(color: Colors.white, fontSize: 15),
         cursorColor: const Color(0xFFFFB21A),
         decoration: InputDecoration(
           hintText: hintText,
-          hintStyle: const TextStyle(
-            color: Color(0xFF7F8793),
-            fontSize: 15,
-          ),
-          prefixIcon: Icon(
-            icon,
-            color: const Color(0xFF8A929E),
-            size: 14,
-          ),
+          hintStyle: const TextStyle(color: Color(0xFF7F8793), fontSize: 15),
+          prefixIcon: Icon(icon, color: const Color(0xFF8A929E), size: 14),
           suffixIcon: suffixIcon,
           prefixIconConstraints: const BoxConstraints(
             minWidth: 40,
             minHeight: 34,
           ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 10,
-          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10),
           filled: true,
-          fillColor: const Color(0xFF080E15).withOpacity(0.80),
+          fillColor: const Color(0xFF080E15).withValues(alpha: 0.80),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(9),
-            borderSide: const BorderSide(
-              color: Color(0xFF263342),
-              width: 1,
-            ),
+            borderSide: const BorderSide(color: Color(0xFF263342), width: 1),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(9),
-            borderSide: const BorderSide(
-              color: Color(0xFF8C6418),
-              width: 1,
-            ),
+            borderSide: const BorderSide(color: Color(0xFF8C6418), width: 1),
           ),
         ),
       ),

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class BottomNavBar extends StatelessWidget {
   final int selectedIndex;
-  final Function(int) onItemTapped;
+  final ValueChanged<int> onItemTapped;
 
   const BottomNavBar({
     super.key,
@@ -12,24 +12,13 @@ class BottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = [
-      ('assets/HOME.png', 'HOME'),
-      ('assets/BRANDS.png', 'BRANDS'),
-      ('assets/SEARCH.png', 'SEARCH'),
-      ('assets/CATALOG.png', 'CATALOG'),
-      ('assets/PROFILE.png', 'PROFILE'),
-    ];
+    const items = ['HOME', 'BRANDS', 'SEARCH', 'CATALOG', 'PROFILE'];
 
     return Container(
-      height: 62,
+      height: 68,
       decoration: const BoxDecoration(
         color: Color(0xFF090D13),
-        border: Border(
-          top: BorderSide(
-            color: Color(0xFF202832),
-            width: 1,
-          ),
-        ),
+        border: Border(top: BorderSide(color: Color(0xFF202832), width: 1)),
       ),
       child: SafeArea(
         top: false,
@@ -43,25 +32,23 @@ class BottomNavBar extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Image.asset(
-                        items[i].$1,
-                        width: 18,
-                        height: 18,
+                      Icon(
+                        _iconForIndex(i),
+                        size: 20,
                         color: i == selectedIndex
                             ? const Color(0xFFFFB21A)
                             : const Color(0xFF737C88),
-                        colorBlendMode: BlendMode.srcIn,
                       ),
 
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
 
                       Text(
-                        items[i].$2,
+                        items[i],
                         style: TextStyle(
                           color: i == selectedIndex
                               ? const Color(0xFFFFB21A)
                               : const Color(0xFF737C88),
-                          fontSize: 6,
+                          fontSize: 8,
                           fontWeight: i == selectedIndex
                               ? FontWeight.w700
                               : FontWeight.w500,
@@ -76,5 +63,16 @@ class BottomNavBar extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  IconData _iconForIndex(int index) {
+    const icons = [
+      Icons.home_outlined,
+      Icons.business_outlined,
+      Icons.search,
+      Icons.grid_view_rounded,
+      Icons.person_outline,
+    ];
+    return icons[index];
   }
 }

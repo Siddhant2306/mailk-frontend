@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../Screens/login.dart';
+
+import 'login.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -29,14 +30,8 @@ class _SplashScreenState extends State<SplashScreen>
       curve: Curves.easeOut,
     );
 
-    _scaleAnimation = Tween<double>(
-      begin: 0.92,
-      end: 1.0,
-    ).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOutBack,
-      ),
+    _scaleAnimation = Tween<double>(begin: 0.92, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutBack),
     );
 
     _animationController.forward();
@@ -59,10 +54,7 @@ class _SplashScreenState extends State<SplashScreen>
           children: [
             // BACKGROUND
             Positioned.fill(
-              child: Image.asset(
-                'assets/bg.png',
-                fit: BoxFit.cover,
-              ),
+              child: Image.asset('assets/bg.png', fit: BoxFit.cover),
             ),
 
             // TOP METAL PRICE CARDS
@@ -102,11 +94,7 @@ class _SplashScreenState extends State<SplashScreen>
                         SizedBox(height: size.height * 0.17),
 
                         // LOGO
-                        Image.asset(
-                          'assets/Logo.png',
-                          width: 95,
-                          height: 95,
-                        ),
+                        Image.asset('assets/Logo.png', width: 95, height: 95),
 
                         const SizedBox(height: 8),
 
@@ -138,10 +126,7 @@ class _SplashScreenState extends State<SplashScreen>
 
                         const Text(
                           'Your Complete Guide to',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                          ),
+                          style: TextStyle(color: Colors.white, fontSize: 16),
                         ),
 
                         const SizedBox(height: 3),
@@ -195,7 +180,9 @@ class _SplashScreenState extends State<SplashScreen>
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const LoginScreen()),
+                      MaterialPageRoute(
+                        builder: (context) => const LoginScreen(),
+                      ),
                     );
                   },
                   style: ElevatedButton.styleFrom(
@@ -217,10 +204,7 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                       ),
                       SizedBox(width: 10),
-                      Icon(
-                        Icons.arrow_forward,
-                        size: 20,
-                      ),
+                      Icon(Icons.arrow_forward, size: 20),
                     ],
                   ),
                 ),
