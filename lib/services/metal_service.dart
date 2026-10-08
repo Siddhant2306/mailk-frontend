@@ -4,7 +4,7 @@ import 'dart:developer' as developer;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import '../core/constants/constants.dart';
+import '../config/api_config.dart';
 import '../models/market_models.dart';
 import '../models/metal_price.dart';
 import 'market_cache.dart';
@@ -15,7 +15,7 @@ class MetalService {
           dio ??
           Dio(
             BaseOptions(
-              baseUrl: ApiConstants.baseUrl,
+              baseUrl: ApiConfig.baseUrl,
               connectTimeout: const Duration(seconds: 10),
               // The upstream metals provider can take longer than ten
               // seconds, especially for the first request after it is idle.

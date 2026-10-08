@@ -13,20 +13,10 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final _searchController = TextEditingController();
 
-  static const _suggestions = ['ESH', 'Hyundai', 'Toyota', 'OEM', 'India'];
-
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
-  }
-
-  void _useSuggestion(String value) {
-    _searchController.value = TextEditingValue(
-      text: value,
-      selection: TextSelection.collapsed(offset: value.length),
-    );
-    setState(() {});
   }
 
   @override
@@ -74,56 +64,11 @@ class _SearchScreenState extends State<SearchScreen> {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: [
-              for (final suggestion in _suggestions)
-                _SuggestionChip(
-                  label: suggestion,
-                  onTap: () => _useSuggestion(suggestion),
-                ),
-            ],
           ),
           const SizedBox(height: 15),
           const _SearchHelpCard(),
           const Spacer(),
-          const Align(alignment: Alignment.centerRight, child: _SettingsButton()),
         ],
-      ),
-    );
-  }
-}
-
-class _SuggestionChip extends StatelessWidget {
-  const _SuggestionChip({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A202B),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFF242D3A)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.search, color: Color(0xFF99A4B1), size: 13),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: const TextStyle(color: Color(0xFFC3CBD5), fontSize: 11),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -159,25 +104,6 @@ class _SearchHelpCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SettingsButton extends StatelessWidget {
-  const _SettingsButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Color(0xFF222935),
-        shape: BoxShape.circle,
-      ),
-      child: const SizedBox(
-        width: 40,
-        height: 40,
-        child: Icon(Icons.settings, color: Color(0xFFD0D6DE), size: 21),
       ),
     );
   }

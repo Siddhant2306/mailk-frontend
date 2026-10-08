@@ -6,18 +6,29 @@ import '../widgets/home/market_period_selector.dart';
 import '../widgets/home/metal_price_grid.dart';
 import '../widgets/navigation.dart';
 import '../core/theme/app_colors.dart';
+import '../models/app_user.dart';
 import '../models/market_models.dart';
 import '../models/metal_price.dart';
 import '../services/brand_service.dart';
+import '../services/admin_user_service.dart';
 import '../services/metal_service.dart';
 import 'brands_screen.dart';
+import 'admin_profile_screen.dart';
 import 'search_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.metalService, this.brandService});
+  const HomeScreen({
+    super.key,
+    this.metalService,
+    this.brandService,
+    this.currentUser,
+    this.adminUserService,
+  });
 
   final MetalService? metalService;
   final BrandService? brandService;
+  final AppUser? currentUser;
+  final AdminUserService? adminUserService;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -146,6 +157,11 @@ class _HomeScreenState extends State<HomeScreen> {
           0 => _buildDashboard(),
           1 => BrandsScreen(brandService: widget.brandService),
           2 => const SearchScreen(),
+          4 when widget.currentUser != null => AdminProfileScreen(
+            user: widget.currentUser!,
+            adminUserService: widget.adminUserService,
+          ),
+          4 => const AdminRestrictedScreen(),
           _ => _PlaceholderPage(index: _selectedNavIndex),
         },
       ),
@@ -201,15 +217,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Illustrative reference prices, updated daily. Verify with your broker before quoting.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Color(0xFF69717D),
-              fontSize: 10,
-              height: 1.4,
-            ),
-          ),
         ],
       ),
     );

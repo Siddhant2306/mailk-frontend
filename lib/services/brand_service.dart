@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../config/api_config.dart';
 import '../core/constants/constants.dart';
 import '../models/car_brand.dart';
 import 'brand_cache.dart';
@@ -10,7 +11,7 @@ class BrandService {
           dio ??
           Dio(
             BaseOptions(
-              baseUrl: ApiConstants.baseUrl,
+              baseUrl: ApiConfig.baseUrl,
               connectTimeout: const Duration(seconds: 10),
               receiveTimeout: const Duration(seconds: 25),
               responseType: ResponseType.json,
