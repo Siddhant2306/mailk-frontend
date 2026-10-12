@@ -24,8 +24,15 @@ class AuthenticatedApiClient {
   final Dio _dio;
   final FirebaseAuth _firebaseAuth;
 
-  Future<Response<dynamic>> get(String path) async {
-    return _dio.get(path, options: await createAuthorizedOptions());
+  Future<Response<dynamic>> get(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    return _dio.get(
+      path,
+      queryParameters: queryParameters,
+      options: await createAuthorizedOptions(),
+    );
   }
 
   Future<Response<dynamic>> post(String path, {Object? data}) async {

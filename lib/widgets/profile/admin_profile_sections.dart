@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_palette.dart';
+import '../../core/theme/app_theme_controller.dart';
 import '../../models/app_user.dart';
 
 class ProfileHeading extends StatelessWidget {
@@ -8,25 +10,43 @@ class ProfileHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final palette = AppPalette.of(context);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return Row(
       children: [
-        Text(
-          'MALIK ENTERPRISES',
-          style: TextStyle(
-            color: AppColors.accent,
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'MALIK ENTERPRISES',
+                style: TextStyle(
+                  color: palette.accent,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Profile',
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
         ),
-        SizedBox(height: 4),
-        Text(
-          'Profile',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
+        IconButton(
+          key: const ValueKey('profile-theme-toggle'),
+          tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
+          onPressed: appThemeController.toggle,
+          icon: Icon(
+            isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+            color: AppColors.accent,
           ),
         ),
       ],
@@ -41,19 +61,20 @@ class ProfileAccountCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return DecoratedBox(
-      decoration: _cardDecoration(11),
+      decoration: _cardDecoration(11, palette),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Row(
           children: [
             CircleAvatar(
               radius: 22,
-              backgroundColor: const Color(0xFF2B210C),
+              backgroundColor: palette.accentSoft,
               child: Text(
                 user.displayName.substring(0, 1).toUpperCase(),
-                style: const TextStyle(
-                  color: AppColors.accent,
+                style: TextStyle(
+                  color: palette.accent,
                   fontWeight: FontWeight.w700,
                   fontSize: 18,
                 ),
@@ -64,14 +85,17 @@ class ProfileAccountCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('SIGNED IN AS', style: _captionStyle),
+                  Text(
+                    'SIGNED IN AS',
+                    style: _captionStyle.copyWith(color: palette.textMuted),
+                  ),
                   const SizedBox(height: 3),
                   Text(
                     user.displayName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: palette.textPrimary,
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -81,7 +105,10 @@ class ProfileAccountCard extends StatelessWidget {
                     user.email,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                    style: TextStyle(
+                      color: palette.textMuted,
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ),
@@ -99,10 +126,10 @@ class AdminCapabilities extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       children: [
         Expanded(
-          child: _CapabilityCard(
+          child: const _CapabilityCard(
             icon: Icons.verified_user_outlined,
             label: 'Access',
             value: 'Approved',
@@ -110,7 +137,7 @@ class AdminCapabilities extends StatelessWidget {
         ),
         SizedBox(width: 8),
         Expanded(
-          child: _CapabilityCard(
+          child: const _CapabilityCard(
             icon: Icons.edit_note_outlined,
             label: 'Entry mode',
             value: 'Single',
@@ -118,7 +145,7 @@ class AdminCapabilities extends StatelessWidget {
         ),
         SizedBox(width: 8),
         Expanded(
-          child: _CapabilityCard(
+          child: const _CapabilityCard(
             icon: Icons.table_chart_outlined,
             label: 'Files',
             value: 'CSV / XLSX',
@@ -135,7 +162,10 @@ class ProfileSectionTitle extends StatelessWidget {
   final String value;
 
   @override
-  Widget build(BuildContext context) => Text(value, style: _captionStyle);
+  Widget build(BuildContext context) => Text(
+    value,
+    style: _captionStyle.copyWith(color: AppPalette.of(context).textMuted),
+  );
 }
 
 class ProfilePrimaryAction extends StatelessWidget {
@@ -152,12 +182,13 @@ class ProfilePrimaryAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return SizedBox(
       height: 47,
       child: ElevatedButton.icon(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.accent,
+          backgroundColor: palette.accent,
           foregroundColor: Colors.black,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
         ),
@@ -184,7 +215,8 @@ class ProfileSecondaryAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = danger ? AppColors.negative : const Color(0xFFD1D7E0);
+    final palette = AppPalette.of(context);
+    final color = danger ? AppColors.negative : palette.textSecondary;
     return SizedBox(
       width: double.infinity,
       height: 47,
@@ -192,7 +224,7 @@ class ProfileSecondaryAction extends StatelessWidget {
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           foregroundColor: color,
-          side: const BorderSide(color: AppColors.border),
+          side: BorderSide(color: palette.border),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
         ),
         icon: Icon(icon, size: 18),
@@ -207,23 +239,28 @@ class AdminSecurityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFF121A25),
+        color: palette.surfaceElevated,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: palette.border),
       ),
-      child: const Padding(
-        padding: EdgeInsets.all(13),
+      child: Padding(
+        padding: const EdgeInsets.all(13),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.shield_outlined, color: AppColors.accent, size: 18),
+            Icon(Icons.shield_outlined, color: palette.accent, size: 18),
             SizedBox(width: 10),
             Expanded(
               child: Text(
                 'Your account role is verified with the backend after sign-in. Converter actions include your Firebase access token.',
-                style: TextStyle(color: AppColors.muted, fontSize: 11, height: 1.35),
+                style: TextStyle(
+                  color: palette.textMuted,
+                  fontSize: 11,
+                  height: 1.35,
+                ),
               ),
             ),
           ],
@@ -240,16 +277,22 @@ class _RolePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF2B210C),
+        color: palette.accentSoft,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF6C5017)),
+        border: Border.all(color: palette.border),
       ),
-      child: Text(role.toUpperCase(), style: const TextStyle(
-        color: AppColors.accent, fontSize: 9, fontWeight: FontWeight.w800,
-      )),
+      child: Text(
+        role.toUpperCase(),
+        style: TextStyle(
+          color: palette.accent,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
@@ -267,23 +310,27 @@ class _CapabilityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return DecoratedBox(
-      decoration: _cardDecoration(9),
+      decoration: _cardDecoration(9, palette),
       child: Padding(
         padding: const EdgeInsets.all(10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: AppColors.accent, size: 16),
+            Icon(icon, color: palette.accent, size: 16),
             const SizedBox(height: 13),
-            Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 9)),
+            Text(
+              label,
+              style: TextStyle(color: palette.textMuted, fontSize: 9),
+            ),
             const SizedBox(height: 2),
             Text(
               value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: palette.textPrimary,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -302,8 +349,8 @@ const _captionStyle = TextStyle(
   letterSpacing: .8,
 );
 
-BoxDecoration _cardDecoration(double radius) => BoxDecoration(
-  color: AppColors.surface,
+BoxDecoration _cardDecoration(double radius, AppPalette palette) => BoxDecoration(
+  color: palette.surfaceElevated,
   borderRadius: BorderRadius.circular(radius),
-  border: Border.all(color: AppColors.border),
+  border: Border.all(color: palette.border),
 );

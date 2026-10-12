@@ -1,16 +1,17 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
-import '../core/theme/app_colors.dart';
+import '../core/theme/app_palette.dart';
 import '../models/car_brand.dart';
 import '../services/brand_service.dart';
 import '../widgets/brands/brand_card.dart';
 import '../widgets/search/catalog_search_field.dart';
 
 class BrandsScreen extends StatefulWidget {
-  const BrandsScreen({super.key, this.brandService});
+  const BrandsScreen({super.key, this.brandService, this.onBrandSelected});
 
   final BrandService? brandService;
+  final ValueChanged<CarBrand>? onBrandSelected;
 
   @override
   State<BrandsScreen> createState() => _BrandsScreenState();
@@ -44,19 +45,40 @@ class _BrandsScreenState extends State<BrandsScreen> {
     });
 
     try {
-      final brands = await _brandService.getBrands(forceRefresh: forceRefresh);
+      final brands = await _brandService.getConverterBrands(
+        forceRefresh: forceRefresh,
+      );
       if (!mounted) {
         return;
       }
       setState(() {
-        // The catalogue design relies on a recognisable brand mark. Records
-        // without a logo are intentionally not presented until the API has
-        // one available for them.
-        _brands = brands.where((brand) => brand.logoUrl != null).toList();
+        _brands =
+            brands
+                .where((brand) => brand.logoUrl?.trim().isNotEmpty == true)
+                .toList()
+              ..sort((first, second) {
+                final countOrder = (second.converterCount ?? 0).compareTo(
+                  first.converterCount ?? 0,
+                );
+                return countOrder != 0
+                    ? countOrder
+                    : first.name.compareTo(second.name);
+              });
         _isLoading = false;
       });
-    } on DioException {
-      _setLoadError('Unable to load brands. Check your connection and retry.');
+    } on DioException catch (error) {
+      final statusCode = error.response?.statusCode;
+      if (statusCode == 401) {
+        _setLoadError('Sign in again to load brands.');
+      } else if (statusCode == 403) {
+        _setLoadError(
+          'The backend denied access to brands. Check the account status and access policy.',
+        );
+      } else {
+        _setLoadError(
+          'Unable to load brands. Check your connection and retry.',
+        );
+      }
     } on FormatException {
       _setLoadError('The brand catalogue could not be read. Please retry.');
     } catch (_) {
@@ -90,10 +112,11 @@ class _BrandsScreenState extends State<BrandsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     final brands = _filteredBrands;
     return RefreshIndicator(
-      color: AppColors.accent,
-      backgroundColor: AppColors.surface,
+      color: palette.accent,
+      backgroundColor: palette.surface,
       onRefresh: () => _loadBrands(forceRefresh: true),
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(
@@ -105,6 +128,10 @@ class _BrandsScreenState extends State<BrandsScreen> {
             sliver: SliverToBoxAdapter(
               child: _BrandsHeader(
                 brandCount: _brands.length,
+                converterCount: _brands.fold<int>(
+                  0,
+                  (total, brand) => total + (brand.converterCount ?? 0),
+                ),
                 searchController: _searchController,
                 onSearchChanged: (_) => setState(() {}),
               ),
@@ -128,7 +155,12 @@ class _BrandsScreenState extends State<BrandsScreen> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
               sliver: SliverGrid(
                 delegate: SliverChildBuilderDelegate(
-                  (context, index) => BrandCard(brand: brands[index]),
+                  (context, index) => BrandCard(
+                    brand: brands[index],
+                    onTap: widget.onBrandSelected == null
+                        ? null
+                        : () => widget.onBrandSelected!(brands[index]),
+                  ),
                   childCount: brands.length,
                 ),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -148,41 +180,46 @@ class _BrandsScreenState extends State<BrandsScreen> {
 class _BrandsHeader extends StatelessWidget {
   const _BrandsHeader({
     required this.brandCount,
+    required this.converterCount,
     required this.searchController,
     required this.onSearchChanged,
   });
 
   final int brandCount;
+  final int converterCount;
   final TextEditingController searchController;
   final ValueChanged<String> onSearchChanged;
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'MALIK ENTERPRISES',
           style: TextStyle(
-            color: AppColors.accent,
+            color: palette.accent,
             fontSize: 9,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.4,
           ),
         ),
         const SizedBox(height: 4),
-        const Text(
+        Text(
           'Brands',
           style: TextStyle(
-            color: Colors.white,
+            color: palette.textPrimary,
             fontSize: 28,
             fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 2),
         Text(
-          brandCount == 0 ? 'Loading catalogue…' : '$brandCount brands',
-          style: const TextStyle(color: AppColors.muted, fontSize: 11),
+          brandCount == 0
+              ? 'Loading catalogue…'
+              : '$brandCount brands • $converterCount converters',
+          style: TextStyle(color: palette.textMuted, fontSize: 11),
         ),
         const SizedBox(height: 16),
         CatalogSearchField(
@@ -200,8 +237,9 @@ class _LoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: CircularProgressIndicator(color: AppColors.accent, strokeWidth: 2),
+    final palette = AppPalette.of(context);
+    return Center(
+      child: CircularProgressIndicator(color: palette.accent, strokeWidth: 2),
     );
   }
 }
@@ -214,22 +252,23 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.cloud_off_outlined,
-              color: AppColors.muted,
+              color: palette.textMuted,
               size: 34,
             ),
             const SizedBox(height: 10),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.muted, fontSize: 13),
+              style: TextStyle(color: palette.textMuted, fontSize: 13),
             ),
             const SizedBox(height: 12),
             TextButton(onPressed: onRetry, child: const Text('Retry')),
@@ -247,10 +286,11 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Center(
       child: Text(
         'No brands match “${query.trim()}”.',
-        style: const TextStyle(color: AppColors.muted, fontSize: 13),
+        style: TextStyle(color: palette.textMuted, fontSize: 13),
       ),
     );
   }

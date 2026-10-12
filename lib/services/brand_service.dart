@@ -3,23 +3,44 @@ import 'package:dio/dio.dart';
 import '../config/api_config.dart';
 import '../core/constants/constants.dart';
 import '../models/car_brand.dart';
+import 'authenticated_api_client.dart';
 import 'brand_cache.dart';
 
 class BrandService {
-  BrandService({Dio? dio, BrandCache? cache})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
-              baseUrl: ApiConfig.baseUrl,
-              connectTimeout: const Duration(seconds: 10),
-              receiveTimeout: const Duration(seconds: 25),
-              responseType: ResponseType.json,
-            ),
+  static const _converterBrandsCacheTtl = Duration(minutes: 5);
+  static List<CarBrand>? _converterBrandsCache;
+  static DateTime? _converterBrandsCachedAt;
+
+  factory BrandService({
+    Dio? dio,
+    BrandCache? cache,
+    AuthenticatedApiClient? apiClient,
+  }) {
+    final clientDio =
+        dio ??
+        Dio(
+          BaseOptions(
+            baseUrl: ApiConfig.baseUrl,
+            connectTimeout: const Duration(seconds: 10),
+            receiveTimeout: const Duration(seconds: 25),
+            responseType: ResponseType.json,
           ),
-      _cache = cache ?? BrandCache();
+        );
+    return BrandService._(
+      dio: clientDio,
+      apiClient: apiClient ?? AuthenticatedApiClient(dio: clientDio),
+      cache: cache ?? BrandCache(),
+    );
+  }
+
+  BrandService._({
+    required this._dio,
+    required this._apiClient,
+    required this._cache,
+  });
 
   final Dio _dio;
+  final AuthenticatedApiClient _apiClient;
   final BrandCache _cache;
 
   /// Returns a fresh cached catalogue when possible. If refreshing fails, an
@@ -46,7 +67,24 @@ class BrandService {
     }
   }
 
-  List<CarBrand> _parseBrands(dynamic responseData) {
+  Future<List<CarBrand>> getConverterBrands({bool forceRefresh = false}) async {
+    final cachedBrands = _converterBrandsCache;
+    final cachedAt = _converterBrandsCachedAt;
+    if (!forceRefresh &&
+        cachedBrands != null &&
+        cachedAt != null &&
+        DateTime.now().difference(cachedAt) < _converterBrandsCacheTtl) {
+      return cachedBrands;
+    }
+
+    final response = await _apiClient.get(ApiConstants.brands);
+    final brands = _parseBrands(response.data, requireLogo: false);
+    _converterBrandsCache = brands;
+    _converterBrandsCachedAt = DateTime.now();
+    return brands;
+  }
+
+  List<CarBrand> _parseBrands(dynamic responseData, {bool requireLogo = true}) {
     final rawBrands = responseData is Map ? responseData['data'] : responseData;
     if (rawBrands is! List) {
       throw const FormatException('Invalid brand response format.');
@@ -59,14 +97,14 @@ class BrandService {
       }
       try {
         final brand = CarBrand.fromJson(Map<String, dynamic>.from(rawBrand));
-        if (brand.logoUrl != null) {
+        if (!requireLogo || brand.logoUrl != null) {
           brands.add(brand);
         }
       } on FormatException {
         // Ignore a malformed record rather than hiding the entire catalogue.
       }
     }
-    if (brands.isEmpty) {
+    if (brands.isEmpty && requireLogo) {
       throw const FormatException('No valid brands were returned.');
     }
     brands.sort((first, second) => first.name.compareTo(second.name));

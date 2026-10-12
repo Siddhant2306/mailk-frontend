@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../config/api_config.dart';
 import '../core/constants/constants.dart';
+import '../core/theme/app_palette.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -42,18 +43,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
       // ------------------------------------------------------------
       // 1. Create the user in Firebase Authentication
       // ------------------------------------------------------------
-      final credential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
+      final credential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+            email: _emailController.text.trim(),
+            password: _passwordController.text,
+          );
 
       final firebaseUser = credential.user;
 
       if (firebaseUser == null) {
-        throw StateError(
-          'Firebase did not return the created user.',
-        );
+        throw StateError('Firebase did not return the created user.');
       }
 
       debugPrint('Firebase user created.');
@@ -66,9 +65,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       final idToken = await firebaseUser.getIdToken();
 
       if (idToken == null) {
-        throw StateError(
-          'Unable to retrieve Firebase ID token.',
-        );
+        throw StateError('Unable to retrieve Firebase ID token.');
       }
 
       debugPrint('Firebase ID token received.');
@@ -81,20 +78,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
       final response = await dio.post(
         ApiConstants.register,
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $idToken',
-          },
-        ),
+        options: Options(headers: {'Authorization': 'Bearer $idToken'}),
       );
 
-      debugPrint(
-        'Registration API status: ${response.statusCode}',
-      );
+      debugPrint('Registration API status: ${response.statusCode}');
 
-      debugPrint(
-        'Registration API response: ${response.data}',
-      );
+      debugPrint('Registration API response: ${response.data}');
 
       // ------------------------------------------------------------
       // 4. Registration succeeded
@@ -110,11 +99,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
       if (!mounted) return;
 
       _showSuccessDialog();
-
     } on FirebaseAuthException catch (error) {
-      debugPrint(
-        'Firebase signup error: ${error.code}',
-      );
+      debugPrint('Firebase signup error: ${error.code}');
 
       String message;
 
@@ -132,30 +118,22 @@ class _SignUpScreenState extends State<SignUpScreen> {
           break;
 
         case 'operation-not-allowed':
-          message =
-              'Email/password registration is not enabled.';
+          message = 'Email/password registration is not enabled.';
           break;
 
         case 'network-request-failed':
-          message =
-              'Network error. Please check your internet connection.';
+          message = 'Network error. Please check your internet connection.';
           break;
 
         default:
-          message =
-              'Could not create your account. Please try again.';
+          message = 'Could not create your account. Please try again.';
       }
 
       _showMessage(message);
-
     } on DioException catch (error) {
-      debugPrint(
-        'Registration API failed: ${error.response?.statusCode}',
-      );
+      debugPrint('Registration API failed: ${error.response?.statusCode}');
 
-      debugPrint(
-        'Registration API response: ${error.response?.data}',
-      );
+      debugPrint('Registration API response: ${error.response?.data}');
 
       String message = 'Could not register your account.';
 
@@ -170,15 +148,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
 
       _showMessage(message);
-
     } catch (error) {
-      debugPrint(
-        'Signup error: $error',
-      );
+      debugPrint('Signup error: $error');
 
-      _showMessage(
-        'Something went wrong. Please try again.',
-      );
+      _showMessage('Something went wrong. Please try again.');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -191,23 +164,21 @@ class _SignUpScreenState extends State<SignUpScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) {
+        final palette = AppPalette.of(context);
         return AlertDialog(
-          backgroundColor: const Color(0xFF10151C),
-          title: const Text(
+          backgroundColor: palette.surfaceElevated,
+          title: Text(
             'Registration submitted',
             style: TextStyle(
-              color: Colors.white,
+              color: palette.textPrimary,
               fontWeight: FontWeight.w700,
             ),
           ),
-          content: const Text(
+          content: Text(
             'Your account has been created successfully. '
             'An administrator needs to approve your account '
             'before you can access MALIK.',
-            style: TextStyle(
-              color: Color(0xFFB7BEC8),
-              height: 1.4,
-            ),
+            style: TextStyle(color: palette.textSecondary, height: 1.4),
           ),
           actions: [
             TextButton(
@@ -215,10 +186,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 Navigator.of(context).pop();
                 Navigator.of(context).pop();
               },
-              child: const Text(
+              child: Text(
                 'Back to sign in',
                 style: TextStyle(
-                  color: Color(0xFFFFB21A),
+                  color: palette.accent,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -232,58 +203,56 @@ class _SignUpScreenState extends State<SignUpScreen> {
   void _showMessage(String message) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-      ),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: const Color(0xFF050709),
+      backgroundColor: palette.background,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset(
-            'assets/login_bg.png',
-            fit: BoxFit.cover,
-          ),
+          if (isDark) Image.asset('assets/login_bg.png', fit: BoxFit.cover),
 
-          ColoredBox(
-            color: Colors.black.withValues(alpha: .42),
-          ),
+          if (isDark) ColoredBox(color: Colors.black.withValues(alpha: .42)),
 
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(20),
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: 440,
-                  ),
+                  constraints: const BoxConstraints(maxWidth: 440),
                   child: Form(
                     key: _formKey,
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.stretch,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         const _BrandMark(),
 
                         const SizedBox(height: 38),
 
-                        const Text(
+                        Text(
                           'Create your account',
-                          style: _titleStyle,
+                          style: TextStyle(
+                            color: palette.textPrimary,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                          ),
                           textAlign: TextAlign.center,
                         ),
 
                         const SizedBox(height: 5),
 
-                        const Text(
+                        Text(
                           'Register to request access to MALIK.',
-                          style: _subtitleStyle,
+                          style: TextStyle(
+                            color: palette.textMuted,
+                            fontSize: 13,
+                          ),
                           textAlign: TextAlign.center,
                         ),
 
@@ -296,13 +265,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           controller: _emailController,
                           icon: Icons.mail_outline,
                           hintText: 'Email address',
-                          keyboardType:
-                              TextInputType.emailAddress,
-                          textInputAction:
-                              TextInputAction.next,
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.next,
                           validator: (value) {
-                            if (value == null ||
-                                value.trim().isEmpty) {
+                            if (value == null || value.trim().isEmpty) {
                               return 'Enter your email address.';
                             }
 
@@ -310,9 +276,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
                             );
 
-                            if (!emailRegex.hasMatch(
-                              value.trim(),
-                            )) {
+                            if (!emailRegex.hasMatch(value.trim())) {
                               return 'Enter a valid email address.';
                             }
 
@@ -330,30 +294,25 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           icon: Icons.lock_outline,
                           hintText: 'Password',
                           obscureText: _hidePassword,
-                          textInputAction:
-                              TextInputAction.next,
+                          textInputAction: TextInputAction.next,
                           suffixIcon: IconButton(
                             tooltip: _hidePassword
                                 ? 'Show password'
                                 : 'Hide password',
                             onPressed: () {
                               setState(() {
-                                _hidePassword =
-                                    !_hidePassword;
+                                _hidePassword = !_hidePassword;
                               });
                             },
                             icon: Icon(
                               _hidePassword
-                                  ? Icons
-                                      .visibility_off_outlined
-                                  : Icons
-                                      .visibility_outlined,
-                              color: const Color(0xFF8A929E),
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              color: palette.textMuted,
                             ),
                           ),
                           validator: (value) {
-                            if (value == null ||
-                                value.isEmpty) {
+                            if (value == null || value.isEmpty) {
                               return 'Enter a password.';
                             }
 
@@ -371,14 +330,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         // Confirm password
                         // ------------------------------------------------
                         _SignUpInput(
-                          controller:
-                              _confirmPasswordController,
+                          controller: _confirmPasswordController,
                           icon: Icons.lock_outline,
                           hintText: 'Confirm password',
-                          obscureText:
-                              _hideConfirmPassword,
-                          textInputAction:
-                              TextInputAction.done,
+                          obscureText: _hideConfirmPassword,
+                          textInputAction: TextInputAction.done,
                           onSubmitted: (_) {
                             if (!_isLoading) {
                               _signUp();
@@ -390,27 +346,22 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 : 'Hide password',
                             onPressed: () {
                               setState(() {
-                                _hideConfirmPassword =
-                                    !_hideConfirmPassword;
+                                _hideConfirmPassword = !_hideConfirmPassword;
                               });
                             },
                             icon: Icon(
                               _hideConfirmPassword
-                                  ? Icons
-                                      .visibility_off_outlined
-                                  : Icons
-                                      .visibility_outlined,
-                              color: const Color(0xFF8A929E),
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              color: palette.textMuted,
                             ),
                           ),
                           validator: (value) {
-                            if (value == null ||
-                                value.isEmpty) {
+                            if (value == null || value.isEmpty) {
                               return 'Confirm your password.';
                             }
 
-                            if (value !=
-                                _passwordController.text) {
+                            if (value != _passwordController.text) {
                               return 'Passwords do not match.';
                             }
 
@@ -426,47 +377,35 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         SizedBox(
                           height: 48,
                           child: ElevatedButton(
-                            onPressed:
-                                _isLoading ? null : _signUp,
+                            onPressed: _isLoading ? null : _signUp,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  const Color(0xFFFFB21A),
+                              backgroundColor: const Color(0xFFFFB21A),
                               foregroundColor: Colors.black,
-                              disabledBackgroundColor:
-                                  const Color(0xFFB78013),
-                              shape:
-                                  RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(9),
+                              disabledBackgroundColor: const Color(0xFFB78013),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(9),
                               ),
                             ),
                             child: _isLoading
                                 ? const SizedBox(
                                     width: 20,
                                     height: 20,
-                                    child:
-                                        CircularProgressIndicator(
+                                    child: CircularProgressIndicator(
                                       color: Colors.black,
                                       strokeWidth: 2.4,
                                     ),
                                   )
                                 : const Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment
-                                            .center,
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Text(
                                         'Create account',
                                         style: TextStyle(
-                                          fontWeight:
-                                              FontWeight.w800,
+                                          fontWeight: FontWeight.w800,
                                         ),
                                       ),
                                       SizedBox(width: 8),
-                                      Icon(
-                                        Icons.arrow_forward,
-                                        size: 18,
-                                      ),
+                                      Icon(Icons.arrow_forward, size: 18),
                                     ],
                                   ),
                           ),
@@ -474,11 +413,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                         const SizedBox(height: 20),
 
-                        const Text(
+                        Text(
                           'Your account will remain pending until an administrator approves your access.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Color(0xFF9AA3B0),
+                            color: palette.textMuted,
                             fontSize: 11,
                             height: 1.35,
                           ),
@@ -493,8 +432,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           onPressed: _isLoading
                               ? null
                               : () {
-                                  Navigator.of(context)
-                                      .pop();
+                                  Navigator.of(context).pop();
                                 },
                           child: const Text(
                             'Already have an account? Sign in',
@@ -517,7 +455,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 }
 
-
 // ============================================================
 // BRAND MARK
 // ============================================================
@@ -527,20 +464,17 @@ class _BrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Column(
       children: [
-        Image.asset(
-          'assets/Logo.png',
-          width: 96,
-          height: 96,
-        ),
+        Image.asset('assets/Logo.png', width: 96, height: 96),
 
         const SizedBox(height: 4),
 
-        const Text(
+        Text(
           'M A L I K',
           style: TextStyle(
-            color: Colors.white,
+            color: palette.textPrimary,
             fontSize: 28,
             fontWeight: FontWeight.w700,
             letterSpacing: 5,
@@ -549,10 +483,10 @@ class _BrandMark extends StatelessWidget {
 
         const SizedBox(height: 5),
 
-        const Text(
+        Text(
           'CATALYTIC CATALOGUE',
           style: TextStyle(
-            color: Color(0xFFFFB21A),
+            color: palette.accent,
             fontSize: 11,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.5,
@@ -562,7 +496,6 @@ class _BrandMark extends StatelessWidget {
     );
   }
 }
-
 
 // ============================================================
 // INPUT FIELD
@@ -593,6 +526,7 @@ class _SignUpInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
@@ -600,40 +534,23 @@ class _SignUpInput extends StatelessWidget {
       textInputAction: textInputAction,
       onFieldSubmitted: onSubmitted,
       validator: validator,
-      style: const TextStyle(
-        color: Colors.white,
-      ),
-      cursorColor: const Color(0xFFFFB21A),
+      style: TextStyle(color: palette.textPrimary),
+      cursorColor: palette.accent,
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: const TextStyle(
-          color: Color(0xFF7F8793),
-        ),
-        prefixIcon: Icon(
-          icon,
-          color: const Color(0xFF8A929E),
-          size: 20,
-        ),
+        hintStyle: TextStyle(color: palette.textMuted),
+        prefixIcon: Icon(icon, color: palette.textMuted, size: 20),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor:
-            const Color(0xFF080E15).withValues(alpha: .84),
+        fillColor: palette.input,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 14,
         ),
-        enabledBorder: _border(
-          const Color(0xFF263342),
-        ),
-        focusedBorder: _border(
-          const Color(0xFF8C6418),
-        ),
-        errorBorder: _border(
-          const Color(0xFFE75A7D),
-        ),
-        focusedErrorBorder: _border(
-          const Color(0xFFE75A7D),
-        ),
+        enabledBorder: _border(palette.border),
+        focusedBorder: _border(palette.accent),
+        errorBorder: _border(const Color(0xFFE75A7D)),
+        focusedErrorBorder: _border(const Color(0xFFE75A7D)),
       ),
     );
   }
@@ -641,25 +558,11 @@ class _SignUpInput extends StatelessWidget {
   OutlineInputBorder _border(Color color) {
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(9),
-      borderSide: BorderSide(
-        color: color,
-      ),
+      borderSide: BorderSide(color: color),
     );
   }
 }
 
-
 // ============================================================
 // STYLES
 // ============================================================
-
-const _titleStyle = TextStyle(
-  color: Colors.white,
-  fontSize: 26,
-  fontWeight: FontWeight.w700,
-);
-
-const _subtitleStyle = TextStyle(
-  color: Color(0xFF9A9DA5),
-  fontSize: 13,
-);

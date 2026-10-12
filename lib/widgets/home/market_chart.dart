@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../../core/utils/market_formatters.dart';
 import '../../models/market_models.dart';
 import '../../models/metal_price.dart';
@@ -26,11 +27,12 @@ class MarketChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: palette.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: palette.border),
       ),
       child: SizedBox(
         height: 312,
@@ -41,7 +43,7 @@ class MarketChart extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const _ChartTitle(),
+                  _ChartTitle(),
                   const Spacer(),
                   for (final metal in MetalType.values) ...[
                     _MetalSelector(
@@ -57,8 +59,8 @@ class MarketChart extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 '${selectedMetal.displayName} trend • ${selectedUnit.chartLabel}',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: palette.textPrimary,
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                 ),
@@ -102,12 +104,14 @@ class _ChartTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    final palette = AppPalette.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Row(
       children: [
         Text(
           'PGM MARKET',
           style: TextStyle(
-            color: Color(0xFFB8C0CB),
+            color: palette.textSecondary,
             fontSize: 14,
             fontWeight: FontWeight.w700,
           ),
@@ -115,7 +119,7 @@ class _ChartTitle extends StatelessWidget {
         SizedBox(width: 7),
         DecoratedBox(
           decoration: BoxDecoration(
-            color: Color(0xFF14251D),
+            color: isDark ? const Color(0xFF14251D) : const Color(0xFFE8F6EC),
             borderRadius: BorderRadius.all(Radius.circular(4)),
           ),
           child: Padding(
@@ -123,7 +127,7 @@ class _ChartTitle extends StatelessWidget {
             child: Text(
               'LIVE',
               style: TextStyle(
-                color: Color(0xFF63C18A),
+                color: isDark ? const Color(0xFF63C18A) : const Color(0xFF267B46),
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
               ),
@@ -148,6 +152,7 @@ class _MetalSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Semantics(
       button: true,
       selected: isSelected,
@@ -171,7 +176,7 @@ class _MetalSelector extends StatelessWidget {
               Text(
                 metal.symbol,
                 style: TextStyle(
-                  color: isSelected ? const Color(0xFFE5E9EF) : AppColors.muted,
+                  color: isSelected ? palette.textPrimary : palette.textMuted,
                   fontSize: 11,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 ),
@@ -199,6 +204,7 @@ class _ChartBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     if (isLoading) {
       return const Center(
         child: CircularProgressIndicator(
@@ -208,10 +214,10 @@ class _ChartBody extends StatelessWidget {
       );
     }
     if (history.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'History is currently unavailable.',
-          style: TextStyle(color: AppColors.muted, fontSize: 12),
+          style: TextStyle(color: palette.textMuted, fontSize: 12),
         ),
       );
     }
@@ -222,6 +228,9 @@ class _ChartBody extends StatelessWidget {
           history: history,
           unit: unit,
           lineColor: AppColors.metal(metal),
+          gridColor: palette.border,
+          labelColor: palette.textMuted,
+          surfaceColor: palette.surface,
         ),
         child: const SizedBox.expand(),
       ),
@@ -236,16 +245,17 @@ class _DateRange extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Row(
       children: [
         Text(
           MarketFormatters.date(history.isEmpty ? null : history.first),
-          style: const TextStyle(color: Color(0xFF697381), fontSize: 10),
+          style: TextStyle(color: palette.textMuted, fontSize: 10),
         ),
         const Spacer(),
         Text(
           MarketFormatters.date(history.isEmpty ? null : history.last),
-          style: const TextStyle(color: Color(0xFF697381), fontSize: 10),
+          style: TextStyle(color: palette.textMuted, fontSize: 10),
         ),
       ],
     );
@@ -265,6 +275,7 @@ class _UnitButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Semantics(
       button: true,
       selected: isSelected,
@@ -275,18 +286,16 @@ class _UnitButton extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: isSelected
-                ? const Color(0xFF332711)
-                : const Color(0xFF151B23),
+            color: isSelected ? palette.accentSoft : palette.surfaceSubtle,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: isSelected ? AppColors.accent : const Color(0xFF303947),
+              color: isSelected ? palette.accent : palette.border,
             ),
           ),
           child: Text(
             unit.chartLabel,
             style: TextStyle(
-              color: isSelected ? AppColors.accentLight : AppColors.muted,
+              color: isSelected ? palette.accent : palette.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w700,
             ),

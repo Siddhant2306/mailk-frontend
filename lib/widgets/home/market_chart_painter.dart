@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_colors.dart';
 import '../../core/utils/market_formatters.dart';
 import '../../models/market_models.dart';
 import '../../models/metal_price.dart';
@@ -12,11 +11,17 @@ class MarketChartPainter extends CustomPainter {
     required this.history,
     required this.unit,
     required this.lineColor,
+    required this.gridColor,
+    required this.labelColor,
+    required this.surfaceColor,
   });
 
   final List<MetalPrice> history;
   final PriceUnit unit;
   final Color lineColor;
+  final Color gridColor;
+  final Color labelColor;
+  final Color surfaceColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -98,7 +103,7 @@ class MarketChartPainter extends CustomPainter {
   void _drawGrid(Canvas canvas, Rect chartRect, _ChartBounds bounds) {
     const gridLineCount = 4;
     final gridPaint = Paint()
-      ..color = const Color(0xFF27313D)
+      ..color = gridColor
       ..strokeWidth = 0.7;
 
     for (var index = 0; index <= gridLineCount; index++) {
@@ -127,7 +132,7 @@ class MarketChartPainter extends CustomPainter {
     _ChartPoint point,
   ) {
     final offset = _offsetFor(chartRect, bounds, point);
-    canvas.drawCircle(offset, 4, Paint()..color = AppColors.surface);
+    canvas.drawCircle(offset, 4, Paint()..color = surfaceColor);
     canvas.drawCircle(offset, 2.5, Paint()..color = lineColor);
   }
 
@@ -142,7 +147,7 @@ class MarketChartPainter extends CustomPainter {
     final painter = TextPainter(
       text: TextSpan(
         text: text,
-        style: const TextStyle(color: Color(0xFF7E8997), fontSize: 8),
+        style: TextStyle(color: labelColor, fontSize: 8),
       ),
       textDirection: TextDirection.ltr,
       maxLines: 1,
@@ -154,7 +159,10 @@ class MarketChartPainter extends CustomPainter {
   bool shouldRepaint(covariant MarketChartPainter oldDelegate) {
     return oldDelegate.history != history ||
         oldDelegate.unit != unit ||
-        oldDelegate.lineColor != lineColor;
+        oldDelegate.lineColor != lineColor ||
+        oldDelegate.gridColor != gridColor ||
+        oldDelegate.labelColor != labelColor ||
+        oldDelegate.surfaceColor != surfaceColor;
   }
 }
 

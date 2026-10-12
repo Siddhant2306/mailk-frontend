@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_palette.dart';
 import '../../models/market_models.dart';
 
 class MarketPeriodSelector extends StatelessWidget {
@@ -44,9 +45,10 @@ class _PeriodButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     final color = isSelected
-        ? const Color(0xFFFFC23D)
-        : const Color(0xFFB3B8C0);
+        ? palette.accent
+        : palette.textSecondary;
 
     return Semantics(
       selected: isSelected,
@@ -60,14 +62,12 @@ class _PeriodButton extends StatelessWidget {
           child: Ink(
             height: 30,
             decoration: BoxDecoration(
-              color: isSelected
-                  ? const Color(0xFF2A2412)
-                  : const Color(0xFF151A21),
+              color: isSelected ? palette.accentSoft : palette.surface,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: isSelected
                     ? const Color(0xFFFFB21A)
-                    : const Color(0xFF202832),
+                    : palette.border,
               ),
             ),
             child: Center(

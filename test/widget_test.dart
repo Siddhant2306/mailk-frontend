@@ -2,15 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:malik/screens/home.dart';
+import 'package:malik/core/theme/app_theme_controller.dart';
+import 'package:malik/core/theme/app_palette.dart';
+import 'package:malik/widgets/profile/admin_profile_sections.dart';
 import 'package:malik/widgets/home/metal_price_grid.dart';
 import 'package:malik/models/market_models.dart';
 import 'package:malik/models/metal_price.dart';
 import 'package:malik/models/car_brand.dart';
 import 'package:malik/models/app_user.dart';
 import 'package:malik/models/converter_draft.dart';
+import 'package:malik/models/converter_record.dart';
 import 'package:malik/models/pending_user.dart';
 import 'package:malik/services/admin_user_service.dart';
 import 'package:malik/services/brand_service.dart';
+import 'package:malik/services/converter_service.dart';
 import 'package:malik/services/metal_service.dart';
 import 'package:malik/services/market_cache.dart';
 
@@ -56,13 +61,17 @@ void main() {
 
   test('reads a brand API record with its optional logo', () {
     final brand = CarBrand.fromJson({
+      'id': 3,
       'slug': 'suzuki',
       'name': 'Suzuki',
       'logo': 'https://example.com/suzuki.png',
+      'converter_count': 12,
     });
 
+    expect(brand.id, 3);
     expect(brand.slug, 'suzuki');
     expect(brand.logoUrl, 'https://example.com/suzuki.png');
+    expect(brand.converterCount, 12);
   });
 
   test('allows the profile tools only for an active approved admin', () {
@@ -136,6 +145,7 @@ void main() {
         home: HomeScreen(
           metalService: _FakeMetalService(),
           brandService: _FakeBrandService(),
+          converterService: _FakeConverterService(),
         ),
       ),
     );
@@ -166,7 +176,78 @@ void main() {
     expect(find.text('Brands'), findsOneWidget);
     expect(find.text('Suzuki'), findsOneWidget);
     expect(find.text('No Logo'), findsNothing);
-    expect(find.text('TODO: converter details'), findsOneWidget);
+    expect(find.text('2 converters'), findsOneWidget);
+    expect(find.text('1 brands • 2 converters'), findsOneWidget);
+    expect(find.textContaining('TODO'), findsNothing);
+
+    await tester.tap(find.text('HOME'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Search a\nReference'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Search'), findsOneWidget);
+    expect(find.text('CAT-1'), findsOneWidget);
+  });
+
+  testWidgets('profile theme button switches between light and dark modes', (
+    tester,
+  ) async {
+    if (appThemeController.themeMode != ThemeMode.dark) {
+      appThemeController.toggle();
+    }
+    addTearDown(() {
+      if (appThemeController.themeMode != ThemeMode.dark) {
+        appThemeController.toggle();
+      }
+    });
+
+    await tester.pumpWidget(
+      AnimatedBuilder(
+        animation: appThemeController,
+        builder: (context, _) => MaterialApp(
+          theme: ThemeData.light(),
+          darkTheme: ThemeData.dark(),
+          themeMode: appThemeController.themeMode,
+          home: const Scaffold(body: ProfileHeading()),
+        ),
+      ),
+    );
+
+    expect(find.byTooltip('Switch to light mode'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('profile-theme-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Switch to dark mode'), findsOneWidget);
+  });
+
+  testWidgets('home market cards use the coordinated light palette', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(extensions: const [AppPalette.light]),
+        home: const Scaffold(
+          body: Center(
+            child: MetalPriceCard(
+              metal: MetalType.platinum,
+              inrQuote: null,
+              usdQuote: null,
+              displayedUnit: PriceUnit.inr,
+              isLoading: false,
+              hasLoadedOnce: true,
+              onRetry: null,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final card = tester.widget<DecoratedBox>(find.byType(DecoratedBox).first);
+    expect(
+      (card.decoration as BoxDecoration).color,
+      AppPalette.light.surfaceElevated,
+    );
+    expect(AppPalette.of(tester.element(find.byType(MetalPriceCard))).textPrimary,
+        AppPalette.light.textPrimary);
   });
 
   testWidgets('shows the admin profile for an approved admin', (tester) async {
@@ -351,7 +432,7 @@ class _FakeMetalService extends MetalService {
   }
 }
 
-class _FakeBrandService extends BrandService {
+class _FakeBrandService implements BrandService {
   @override
   Future<List<CarBrand>> getBrands({bool forceRefresh = false}) async {
     return const [
@@ -363,6 +444,64 @@ class _FakeBrandService extends BrandService {
       ),
     ];
   }
+
+  @override
+  Future<List<CarBrand>> getConverterBrands({bool forceRefresh = false}) async {
+    return const [
+      CarBrand(
+        id: 2,
+        slug: 'no-logo',
+        name: 'No Logo',
+        logoUrl: null,
+        converterCount: 1,
+      ),
+      CarBrand(
+        id: 3,
+        slug: 'suzuki',
+        name: 'Suzuki',
+        logoUrl: 'https://carimagesapi.com/makes/suzuki.png',
+        converterCount: 2,
+      ),
+    ];
+  }
+}
+
+class _FakeConverterService implements ConverterService {
+  @override
+  Future<ConverterCatalogPage> getConverters({
+    required int page,
+    int pageSize = 20,
+    String? search,
+    int? brandId,
+    Map<int, String> brandsById = const {},
+    bool forceRefresh = false,
+  }) async {
+    return ConverterCatalogPage(
+      converters: const [ConverterRecord(id: 1, codeReference: 'CAT-1')],
+      total: 1,
+      page: page,
+      pageSize: pageSize,
+    );
+  }
+
+  @override
+  Future<ConverterRecord> getConverter(
+    int converterId, {
+    Map<int, String> brandsById = const {},
+  }) async =>
+      ConverterRecord(id: converterId, codeReference: 'CAT-$converterId');
+
+  @override
+  Future<int> createConverter(ConverterDraft draft) async => 1;
+
+  @override
+  Future<String> uploadConverterImage({
+    required List<int> bytes,
+    required String fileName,
+  }) async => '';
+
+  @override
+  String messageFor(Object error) => 'Request failed';
 }
 
 class _FakeAdminUserService implements AdminUserService {

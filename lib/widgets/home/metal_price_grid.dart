@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../../core/utils/market_formatters.dart';
 import '../../models/market_models.dart';
 import '../../models/metal_price.dart';
@@ -73,6 +74,7 @@ class MetalPriceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     final preferredQuote = displayedUnit == PriceUnit.inr ? inrQuote : usdQuote;
     final quote = preferredQuote;
     final unit = displayedUnit;
@@ -81,9 +83,9 @@ class MetalPriceCard extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
+        color: palette.surfaceElevated,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: palette.border),
       ),
       child: Padding(
         padding: const EdgeInsets.all(8),
@@ -96,7 +98,7 @@ class MetalPriceCard extends StatelessWidget {
               metal.displayName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AppColors.muted, fontSize: 8),
+              style: TextStyle(color: palette.textMuted, fontSize: 8),
             ),
             const Spacer(),
             _PriceText(quote: quote, unit: unit, isLoading: isLoading),
@@ -129,26 +131,27 @@ class _CardStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     if (isLoading || !hasLoadedOnce) {
-      return const Text(
+      return Text(
         'Updating…',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: AppColors.muted, fontSize: 8),
+        style: TextStyle(color: palette.textMuted, fontSize: 8),
       );
     }
 
     return InkWell(
       onTap: onRetry,
       borderRadius: BorderRadius.circular(3),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(vertical: 1),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 1),
         child: Text(
           'Tap to retry',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: AppColors.accentLight,
+            color: palette.accent,
             fontSize: 8,
             fontWeight: FontWeight.w600,
           ),
@@ -165,6 +168,7 @@ class _MetalHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Row(
       children: [
         DecoratedBox(
@@ -177,8 +181,8 @@ class _MetalHeading extends StatelessWidget {
         const SizedBox(width: 4),
         Text(
           metal.symbol,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: palette.textPrimary,
             fontSize: 10,
             fontWeight: FontWeight.w700,
           ),
@@ -201,6 +205,7 @@ class _PriceText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     final value = isLoading && quote == null
         ? 'Loading…'
         : unit == PriceUnit.inr
@@ -234,8 +239,8 @@ class _PriceText extends StatelessWidget {
               child: Text(
                 value,
                 maxLines: 1,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: palette.textPrimary,
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                 ),

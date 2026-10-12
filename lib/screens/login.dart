@@ -5,6 +5,7 @@ import 'package:malik/screens/sign_in.dart' show SignUpScreen;
 
 import '../config/api_config.dart';
 import '../core/constants/constants.dart';
+import '../core/theme/app_palette.dart';
 import '../models/app_user.dart';
 import 'home.dart';
 
@@ -215,6 +216,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       debugPrint('Firebase ID token received.');
+      debugPrint(idToken);
 
       // ----------------------------------------------------------
       // IMPORTANT:
@@ -547,6 +549,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     // ----------------------------------------------------------
     // PERSISTENT LOGIN CHECK
     //
@@ -559,7 +563,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF050709),
+      backgroundColor: palette.background,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -567,22 +571,22 @@ class _LoginScreenState extends State<LoginScreen> {
           // BACKGROUND
           // ------------------------------------------------------
 
-          Positioned.fill(
-            child: Image.asset(
-              'assets/login_bg.png',
-              fit: BoxFit.cover,
+          if (isDark)
+            Positioned.fill(
+              child: Image.asset(
+                'assets/login_bg.png',
+                fit: BoxFit.cover,
+              ),
             ),
-          ),
 
           // ------------------------------------------------------
           // DARK OVERLAY
           // ------------------------------------------------------
 
-          Container(
-            color: Colors.black.withValues(
-              alpha: 0.30,
+          if (isDark)
+            Container(
+              color: Colors.black.withValues(alpha: 0.30),
             ),
-          ),
 
           // ------------------------------------------------------
           // CONTENT
@@ -629,10 +633,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                   fit: BoxFit.contain,
                                 ),
 
-                                const Text(
+                                Text(
                                   'M A L I K',
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: palette.textPrimary,
                                     fontSize: 35,
                                     fontWeight:
                                         FontWeight.w600,
@@ -644,11 +648,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                   height: 3,
                                 ),
 
-                                const Text(
+                                Text(
                                   'CATALYTIC CATALOGUE',
                                   style: TextStyle(
-                                    color:
-                                        Color(0xFFFFB21A),
+                                    color: palette.accent,
                                     fontSize: 12,
                                     fontWeight:
                                         FontWeight.w600,
@@ -667,10 +670,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           // TITLE
                           // ------------------------------------------------
 
-                          const Text(
+                          Text(
                             'Welcome Back',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: palette.textPrimary,
                               fontSize: 25,
                               fontWeight:
                                   FontWeight.w600,
@@ -681,11 +684,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             height: 3,
                           ),
 
-                          const Text(
+                          Text(
                             'Sign in to continue to your account',
                             style: TextStyle(
-                              color:
-                                  Color(0xFF9A9DA5),
+                              color: palette.textMuted,
                               fontSize: 12,
                             ),
                           ),
@@ -749,10 +751,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         .visibility_off_outlined
                                     : Icons
                                         .visibility_outlined,
-                                color:
-                                    const Color(
-                                  0xFF78808D,
-                                ),
+                                color: palette.textMuted,
                                 size: 20,
                               ),
                               padding:
@@ -781,11 +780,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 onTap: isLoading
                                     ? null
                                     : _forgotPassword,
-                                child: const Text(
+                                child: Text(
                                   'Forgot Password?',
                                   style: TextStyle(
-                                    color:
-                                        Color(0xFFFFC32A),
+                                    color: palette.accent,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -888,24 +886,18 @@ class _LoginScreenState extends State<LoginScreen> {
                               Expanded(
                                 child: Container(
                                   height: 1,
-                                  color:
-                                      const Color(
-                                    0xFF222933,
-                                  ),
+                                  color: palette.border,
                                 ),
                               ),
-                              const Padding(
+                              Padding(
                                 padding:
-                                    EdgeInsets.symmetric(
+                                    const EdgeInsets.symmetric(
                                   horizontal: 12,
                                 ),
                                 child: Text(
                                   'OR',
                                   style: TextStyle(
-                                    color:
-                                        Color(
-                                      0xFF737984,
-                                    ),
+                                    color: palette.textMuted,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -913,10 +905,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               Expanded(
                                 child: Container(
                                   height: 1,
-                                  color:
-                                      const Color(
-                                    0xFF222933,
-                                  ),
+                                  color: palette.border,
                                 ),
                               ),
                             ],
@@ -948,18 +937,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                   OutlinedButton
                                       .styleFrom(
                                 side:
-                                    const BorderSide(
-                                  color:
-                                      Color(
-                                    0xFF202A35,
-                                  ),
+                                    BorderSide(
+                                  color: palette.border,
                                 ),
                                 backgroundColor:
-                                    const Color(
-                                  0xFF080D13,
-                                ).withValues(
-                                  alpha: 0.55,
-                                ),
+                                    palette.surfaceElevated,
                                 shape:
                                     RoundedRectangleBorder(
                                   borderRadius:
@@ -985,14 +967,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                   const SizedBox(
                                     width: 8,
                                   ),
-                                  const Text(
+                                  Text(
                                     'Continue with Google',
                                     style:
                                         TextStyle(
                                       color:
-                                          Color(
-                                        0xFFC5C8CE,
-                                      ),
+                                          palette.textSecondary,
                                       fontSize: 15,
                                       fontWeight:
                                           FontWeight
@@ -1018,7 +998,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               onTap:
                                   _openSignUp,
                               child:
-                                  const Text.rich(
+                                  Text.rich(
                                 TextSpan(
                                   children: [
                                     TextSpan(
@@ -1027,9 +1007,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       style:
                                           TextStyle(
                                         color:
-                                            Color(
-                                          0xFF7D838D,
-                                        ),
+                                            palette.textMuted,
                                         fontSize: 12,
                                       ),
                                     ),
@@ -1039,9 +1017,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       style:
                                           TextStyle(
                                         color:
-                                            Color(
-                                          0xFFFFB21A,
-                                        ),
+                                            palette.accent,
                                         fontSize: 12,
                                         fontWeight:
                                             FontWeight
@@ -1084,6 +1060,7 @@ class _LoginScreenState extends State<LoginScreen> {
     TextInputAction? textInputAction,
     ValueChanged<String>? onSubmitted,
   }) {
+    final palette = AppPalette.of(context);
     return SizedBox(
       height: 40,
       child: TextField(
@@ -1092,21 +1069,20 @@ class _LoginScreenState extends State<LoginScreen> {
         keyboardType: keyboardType,
         textInputAction: textInputAction,
         onSubmitted: onSubmitted,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: palette.textPrimary,
           fontSize: 15,
         ),
-        cursorColor:
-            const Color(0xFFFFB21A),
+        cursorColor: palette.accent,
         decoration: InputDecoration(
           hintText: hintText,
-          hintStyle: const TextStyle(
-            color: Color(0xFF7F8793),
+          hintStyle: TextStyle(
+            color: palette.textMuted,
             fontSize: 15,
           ),
           prefixIcon: Icon(
             icon,
-            color: const Color(0xFF8A929E),
+            color: palette.textMuted,
             size: 14,
           ),
           suffixIcon: suffixIcon,
@@ -1120,16 +1096,14 @@ class _LoginScreenState extends State<LoginScreen> {
             horizontal: 10,
           ),
           filled: true,
-          fillColor:
-              const Color(0xFF080E15)
-                  .withValues(alpha: 0.80),
+          fillColor: palette.input,
           enabledBorder:
               OutlineInputBorder(
             borderRadius:
                 BorderRadius.circular(9),
             borderSide:
-                const BorderSide(
-              color: Color(0xFF263342),
+                BorderSide(
+                color: palette.border,
               width: 1,
             ),
           ),
@@ -1138,8 +1112,8 @@ class _LoginScreenState extends State<LoginScreen> {
             borderRadius:
                 BorderRadius.circular(9),
             borderSide:
-                const BorderSide(
-              color: Color(0xFF8C6418),
+                BorderSide(
+                color: palette.accent,
               width: 1,
             ),
           ),
@@ -1158,22 +1132,23 @@ class _SessionCheckingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor:
-          const Color(0xFF050709),
+      backgroundColor: palette.background,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset(
-            'assets/login_bg.png',
-            fit: BoxFit.cover,
-          ),
-
-          Container(
-            color: Colors.black.withValues(
-              alpha: 0.45,
+          if (isDark)
+            Image.asset(
+              'assets/login_bg.png',
+              fit: BoxFit.cover,
             ),
-          ),
+
+          if (isDark)
+            Container(
+              color: Colors.black.withValues(alpha: 0.45),
+            ),
 
           Center(
             child: Column(
@@ -1191,10 +1166,10 @@ class _SessionCheckingScreen extends StatelessWidget {
                   height: 8,
                 ),
 
-                const Text(
+                Text(
                   'M A L I K',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: palette.textPrimary,
                     fontSize: 30,
                     fontWeight:
                         FontWeight.w600,
@@ -1206,11 +1181,10 @@ class _SessionCheckingScreen extends StatelessWidget {
                   height: 5,
                 ),
 
-                const Text(
+                Text(
                   'CATALYTIC CATALOGUE',
                   style: TextStyle(
-                    color:
-                        Color(0xFFFFB21A),
+                    color: palette.accent,
                     fontSize: 10,
                     fontWeight:
                         FontWeight.w600,
@@ -1222,13 +1196,11 @@ class _SessionCheckingScreen extends StatelessWidget {
                   height: 30,
                 ),
 
-                const SizedBox(
+                SizedBox(
                   width: 22,
                   height: 22,
-                  child:
-                      CircularProgressIndicator(
-                    color:
-                        Color(0xFFFFB21A),
+                  child: CircularProgressIndicator(
+                    color: palette.accent,
                     strokeWidth: 2,
                   ),
                 ),

@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
+import '../core/theme/app_palette.dart';
 import '../models/app_user.dart';
 import '../models/pending_user.dart';
 import '../services/admin_user_service.dart';
@@ -53,7 +54,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
     final converterId = await showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppPalette.of(context).surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
@@ -70,7 +71,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppPalette.of(context).surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
@@ -108,7 +109,10 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
     }
   }
 
-  Future<void> _reviewUser(PendingUser pendingUser, {required bool approve}) async {
+  Future<void> _reviewUser(
+    PendingUser pendingUser, {
+    required bool approve,
+  }) async {
     setState(() => _workingUserId = pendingUser.id);
     try {
       if (approve) {
@@ -145,8 +149,9 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return ColoredBox(
-      color: AppColors.background,
+      color: Theme.of(context).scaffoldBackgroundColor,
       child: SafeArea(
         bottom: false,
         child: ListView(
@@ -187,11 +192,11 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
               onPressed: () => _signOut(context),
             ),
             const SizedBox(height: 22),
-            const Text(
+            Text(
               '© MALIK ENTERPRISES · CATALOGUE',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Color(0xFF5D6877),
+                color: palette.textMuted,
                 fontSize: 9,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1,
@@ -204,6 +209,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
   }
 
   Widget _buildPendingApprovals() {
+    final palette = AppPalette.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -224,7 +230,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                 _pendingUsers.isEmpty
                     ? 'All caught up'
                     : '${_pendingUsers.length} waiting',
-                style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                style: TextStyle(color: palette.textMuted, fontSize: 11),
               ),
           ],
         ),
@@ -247,8 +253,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
           const _ApprovalMessage(
             icon: Icons.verified_outlined,
             title: 'Queue is clear',
-            message:
-                'No one is waiting for approval. New registrations will appear here.',
+            message: 'No one is waiting for approval. New registrations will appear here.',
           )
         else
           for (final pendingUser in _pendingUsers)
@@ -284,15 +289,16 @@ class _PendingApprovalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     final initial = user.displayName.trim().isEmpty
         ? '?'
         : user.displayName.trim().substring(0, 1).toUpperCase();
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: const Color(0xFF141C28),
+        color: palette.surfaceElevated,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: palette.border),
       ),
       child: Column(
         children: [
@@ -300,11 +306,11 @@ class _PendingApprovalCard extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 21,
-                backgroundColor: const Color(0xFF202A39),
+                backgroundColor: palette.surfaceSubtle,
                 child: Text(
                   initial,
-                  style: const TextStyle(
-                    color: AppColors.muted,
+                  style: TextStyle(
+                    color: palette.textMuted,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -318,8 +324,8 @@ class _PendingApprovalCard extends StatelessWidget {
                       user.displayName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: palette.textPrimary,
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                       ),
@@ -329,10 +335,7 @@ class _PendingApprovalCard extends StatelessWidget {
                       user.email,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 10,
-                      ),
+                      style: TextStyle(color: palette.textMuted, fontSize: 10),
                     ),
                   ],
                 ),
@@ -379,7 +382,7 @@ class _PendingApprovalCard extends StatelessWidget {
                     label: const Text('Reject'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.negative,
-                      side: const BorderSide(color: AppColors.border),
+                      side: BorderSide(color: palette.border),
                       textStyle: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -413,13 +416,14 @@ class _ApprovalMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       decoration: BoxDecoration(
-        color: const Color(0xFF141C28),
+        color: palette.surfaceElevated,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: palette.border),
       ),
       child: Column(
         children: [
@@ -428,8 +432,8 @@ class _ApprovalMessage extends StatelessWidget {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: palette.textPrimary,
               fontSize: 15,
               fontWeight: FontWeight.w700,
             ),
@@ -438,8 +442,8 @@ class _ApprovalMessage extends StatelessWidget {
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppColors.muted,
+            style: TextStyle(
+              color: palette.textMuted,
               fontSize: 11,
               height: 1.4,
             ),
@@ -459,30 +463,31 @@ class AdminRestrictedScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const ColoredBox(
-      color: AppColors.background,
+    final palette = AppPalette.of(context);
+    return ColoredBox(
+      color: palette.background,
       child: SafeArea(
         child: Center(
           child: Padding(
-            padding: EdgeInsets.all(28),
+            padding: const EdgeInsets.all(28),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.lock_outline, color: AppColors.accent, size: 36),
-                SizedBox(height: 14),
+                Icon(Icons.lock_outline, color: palette.accent, size: 36),
+                const SizedBox(height: 14),
                 Text(
                   'Admin profile',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: palette.textPrimary,
                     fontSize: 21,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text(
                   'Converter management is available only to approved admin accounts.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.muted, height: 1.4),
+                  style: TextStyle(color: palette.textMuted, height: 1.4),
                 ),
               ],
             ),

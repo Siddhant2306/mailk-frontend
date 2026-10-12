@@ -5,15 +5,17 @@ import '../widgets/home/market_chart.dart';
 import '../widgets/home/market_period_selector.dart';
 import '../widgets/home/metal_price_grid.dart';
 import '../widgets/navigation.dart';
-import '../core/theme/app_colors.dart';
+import '../core/theme/app_palette.dart';
 import '../models/app_user.dart';
 import '../models/market_models.dart';
 import '../models/metal_price.dart';
 import '../services/brand_service.dart';
 import '../services/admin_user_service.dart';
+import '../services/converter_service.dart';
 import '../services/metal_service.dart';
 import 'brands_screen.dart';
 import 'admin_profile_screen.dart';
+import 'catalog_screen.dart';
 import 'search_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,12 +23,14 @@ class HomeScreen extends StatefulWidget {
     super.key,
     this.metalService,
     this.brandService,
+    this.converterService,
     this.currentUser,
     this.adminUserService,
   });
 
   final MetalService? metalService;
   final BrandService? brandService;
+  final ConverterService? converterService;
   final AppUser? currentUser;
   final AdminUserService? adminUserService;
 
@@ -38,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late final MetalService _metalService;
 
   var _selectedNavIndex = 0;
+  int? _catalogBrandId;
   var _selectedPeriod = MarketPeriod.tenDays;
   var _selectedMetal = MetalType.platinum;
   var _selectedUnit = PriceUnit.inr;
@@ -151,12 +156,32 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: switch (_selectedNavIndex) {
           0 => _buildDashboard(),
-          1 => BrandsScreen(brandService: widget.brandService),
-          2 => const SearchScreen(),
+          1 => BrandsScreen(
+            brandService: widget.brandService,
+            onBrandSelected: (brand) {
+              if (brand.id == null) {
+                return;
+              }
+              setState(() {
+                _catalogBrandId = brand.id;
+                _selectedNavIndex = 3;
+              });
+            },
+          ),
+          2 => SearchScreen(
+            converterService: widget.converterService,
+            brandService: widget.brandService,
+          ),
+          3 => CatalogScreen(
+            converterService: widget.converterService,
+            brandService: widget.brandService,
+            initialBrandId: _catalogBrandId,
+            isAdmin: widget.currentUser?.isAdmin == true,
+          ),
           4 when widget.currentUser != null => AdminProfileScreen(
             user: widget.currentUser!,
             adminUserService: widget.adminUserService,
@@ -173,11 +198,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildDashboard() {
+    final palette = AppPalette.of(context);
     final history = _snapshot.historyFor(_selectedMetal, _selectedUnit);
 
     return RefreshIndicator(
-      color: AppColors.accent,
-      backgroundColor: AppColors.surface,
+      color: palette.accent,
+      backgroundColor: palette.surface,
       onRefresh: () =>
           _loadMarketData(reloadLivePrices: true, forceRefresh: true),
       child: ListView(
@@ -188,7 +214,10 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           const DashboardHeader(),
           const SizedBox(height: 16),
-          QuickActions(onBrowseBrands: () => _selectNavigation(1)),
+          QuickActions(
+            onSearchReference: () => _selectNavigation(2),
+            onBrowseBrands: () => _selectNavigation(1),
+          ),
           const SizedBox(height: 18),
           MarketPeriodSelector(
             selectedPeriod: _selectedPeriod,
@@ -253,12 +282,13 @@ class _PlaceholderPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     const labels = ['Home', 'Brands', 'Search', 'Catalog', 'Profile'];
     return Center(
       child: Text(
         labels[index],
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: palette.textPrimary,
           fontSize: 24,
           fontWeight: FontWeight.w600,
         ),

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../../models/converter_draft.dart';
 import '../../services/converter_service.dart';
 
@@ -201,6 +202,7 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
   Widget build(BuildContext context) {
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final availableHeight = MediaQuery.sizeOf(context).height - keyboardInset;
+    final palette = AppPalette.of(context);
     return AnimatedPadding(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
@@ -209,26 +211,29 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
         top: false,
         child: SizedBox(
           height: availableHeight * 0.94,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
-                      child: _step == 0
-                          ? _buildIdentificationStep()
-                          : _buildMetricsStep(),
+          child: ColoredBox(
+            color: palette.surface,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        child: _step == 0
+                            ? _buildIdentificationStep()
+                            : _buildMetricsStep(),
+                      ),
                     ),
-                  ),
-                  _buildBottomAction(),
-                ],
+                    _buildBottomAction(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -238,6 +243,7 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
   }
 
   Widget _buildHeader() {
+    final palette = AppPalette.of(context);
     return Column(
       children: [
         Center(
@@ -245,7 +251,7 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
             width: 36,
             height: 4,
             decoration: BoxDecoration(
-              color: const Color(0xFF4A5260),
+              color: palette.border,
               borderRadius: BorderRadius.circular(5),
             ),
           ),
@@ -259,20 +265,20 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
                   : _goToIdentification,
               icon: const Icon(Icons.arrow_back_rounded),
               style: IconButton.styleFrom(
-                backgroundColor: const Color(0xFF171F2C),
-                foregroundColor: const Color(0xFFD8DCE2),
-                side: const BorderSide(color: Color(0xFF283241)),
+                backgroundColor: palette.surfaceElevated,
+                foregroundColor: palette.textPrimary,
+                side: BorderSide(color: palette.border),
               ),
             ),
             const SizedBox(width: 10),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'MALIK ENTERPRISES',
                     style: TextStyle(
-                      color: AppColors.accent,
+                      color: palette.accent,
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.2,
@@ -282,7 +288,7 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
                   Text(
                     'Add Converter',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: palette.textPrimary,
                       fontSize: 19,
                       fontWeight: FontWeight.w700,
                     ),
@@ -293,14 +299,14 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               decoration: BoxDecoration(
-                color: const Color(0xFF171F2C),
+                color: palette.surfaceElevated,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFF283241)),
+                border: Border.all(color: palette.border),
               ),
               child: Text(
                 'STEP ${_step + 1} OF 2',
-                style: const TextStyle(
-                  color: Color(0xFFAAB4C2),
+                style: TextStyle(
+                  color: palette.textMuted,
                   fontSize: 9,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1,
@@ -314,6 +320,7 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
   }
 
   Widget _buildIdentificationStep() {
+    final palette = AppPalette.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -343,10 +350,10 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
         ),
         if (_isPickingImage) ...[
           const SizedBox(height: 8),
-          const LinearProgressIndicator(
+          LinearProgressIndicator(
             minHeight: 2,
-            color: AppColors.accent,
-            backgroundColor: Color(0xFF283241),
+            color: palette.accent,
+            backgroundColor: palette.border,
           ),
         ],
         if (_pendingImages.isNotEmpty) ...[
@@ -450,15 +457,15 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
                         : type;
                   });
                 },
-                selectedColor: AppColors.accent,
-                backgroundColor: const Color(0xFF171F2C),
+                selectedColor: AppPalette.of(context).accent,
+                backgroundColor: AppPalette.of(context).surfaceElevated,
                 labelStyle: TextStyle(
                   color: _typeController.text == type
-                      ? Colors.black
-                      : const Color(0xFFAAB4C2),
+                      ? AppPalette.of(context).surface
+                      : AppPalette.of(context).textSecondary,
                   fontSize: 11,
                 ),
-                side: const BorderSide(color: Color(0xFF283241)),
+                side: BorderSide(color: AppPalette.of(context).border),
               ),
           ],
         ),
@@ -478,6 +485,7 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
   }
 
   Widget _buildMetricsStep() {
+    final palette = AppPalette.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -493,9 +501,9 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
           width: double.infinity,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFF171F2C),
+            color: palette.surfaceElevated,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFF283241)),
+            border: Border.all(color: palette.border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -558,9 +566,9 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF171F2C),
+              color: palette.surfaceElevated,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF283241)),
+              border: Border.all(color: palette.border),
             ),
             child: Row(
               children: [
@@ -582,8 +590,8 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
                         _pendingImages.first.fileName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: palette.textPrimary,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -593,8 +601,8 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
                         _pendingImages.length == 1
                             ? '1 image selected'
                             : '${_pendingImages.length} images selected',
-                        style: const TextStyle(
-                          color: AppColors.muted,
+                        style: TextStyle(
+                          color: palette.textMuted,
                           fontSize: 10,
                         ),
                       ),
@@ -675,15 +683,16 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
   }
 
   Widget _buildCountryOfOrigin() {
+    final palette = AppPalette.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Country of Origin',
             style: TextStyle(
-              color: Color(0xFFC7CED8),
+              color: palette.textSecondary,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -693,19 +702,19 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
             decoration: BoxDecoration(
-              color: const Color(0xFF111722),
+              color: palette.surfaceSubtle,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF283241)),
+              border: Border.all(color: palette.border),
             ),
-            child: const Row(
+            child: Row(
               children: [
                 Expanded(
                   child: Text(
                     'India',
-                    style: TextStyle(color: Colors.white, fontSize: 13),
+                    style: TextStyle(color: palette.textPrimary, fontSize: 13),
                   ),
                 ),
-                Icon(Icons.public, color: AppColors.muted, size: 17),
+                Icon(Icons.public, color: palette.textMuted, size: 17),
               ],
             ),
           ),
@@ -745,14 +754,15 @@ class _PhotoAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return SizedBox(
       height: 132,
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          backgroundColor: const Color(0xFF171F2C),
-          foregroundColor: AppColors.accent,
-          side: const BorderSide(color: Color(0xFF283241)),
+          backgroundColor: palette.surfaceElevated,
+          foregroundColor: palette.accent,
+          side: BorderSide(color: palette.border),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -771,7 +781,7 @@ class _PhotoAction extends StatelessWidget {
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.muted, fontSize: 10),
+              style: TextStyle(color: palette.textMuted, fontSize: 10),
             ),
           ],
         ),
@@ -787,24 +797,25 @@ class _InfoNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
-        color: const Color(0xFF111722),
+        color: palette.surfaceSubtle,
         borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: const Color(0xFF283241)),
+        border: Border.all(color: palette.border),
       ),
       child: Row(
         children: [
-          const Icon(Icons.info_outline, color: AppColors.accent, size: 17),
+          Icon(Icons.info_outline, color: palette.accent, size: 17),
           const SizedBox(width: 9),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                color: AppColors.muted,
+              style: TextStyle(
+                color: palette.textMuted,
                 fontSize: 11,
                 height: 1.35,
               ),
@@ -835,6 +846,7 @@ class _AdminField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -842,8 +854,8 @@ class _AdminField extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(
-              color: Color(0xFFC7CED8),
+            style: TextStyle(
+              color: palette.textSecondary,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -855,27 +867,27 @@ class _AdminField extends StatelessWidget {
             validator: validator,
             maxLines: maxLines,
             scrollPadding: const EdgeInsets.all(24),
-            style: const TextStyle(color: Colors.white, fontSize: 13),
+            style: TextStyle(color: palette.textPrimary, fontSize: 13),
             cursorColor: AppColors.accent,
             decoration: InputDecoration(
               hintText: hintText,
-              hintStyle: const TextStyle(
-                color: Color(0xFF707A89),
+              hintStyle: TextStyle(
+                color: palette.textMuted,
                 fontSize: 12,
               ),
               filled: true,
-              fillColor: const Color(0xFF111722),
+              fillColor: palette.surfaceSubtle,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
                 vertical: 12,
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFF283241)),
+                borderSide: BorderSide(color: palette.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AppColors.accent),
+                borderSide: BorderSide(color: palette.accent),
               ),
             ),
           ),
@@ -892,12 +904,13 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 12),
       child: Text(
         label,
-        style: const TextStyle(
-          color: AppColors.accent,
+        style: TextStyle(
+          color: palette.accent,
           fontSize: 10,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.1,
@@ -914,11 +927,12 @@ class _FieldHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Text(
         text,
-        style: const TextStyle(color: AppColors.muted, fontSize: 10),
+        style: TextStyle(color: palette.textMuted, fontSize: 10),
       ),
     );
   }

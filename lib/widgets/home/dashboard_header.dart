@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_palette.dart';
+
 class DashboardHeader extends StatelessWidget {
   const DashboardHeader({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Row(
       children: [
         Image.asset(
@@ -14,7 +17,7 @@ class DashboardHeader extends StatelessWidget {
           fit: BoxFit.contain,
         ),
         const SizedBox(width: 10),
-        const Expanded(
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -23,7 +26,7 @@ class DashboardHeader extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: palette.textPrimary,
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.1,
@@ -34,7 +37,10 @@ class DashboardHeader extends StatelessWidget {
                 'Catalytic Converter Reference Catalog',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Color(0xFF858D99), fontSize: 12),
+                style: TextStyle(
+                  color: palette.textMuted,
+                  fontSize: 12,
+                ),
               ),
             ],
           ),
@@ -45,19 +51,25 @@ class DashboardHeader extends StatelessWidget {
 }
 
 class QuickActions extends StatelessWidget {
-  const QuickActions({super.key, this.onBrowseBrands});
+  const QuickActions({
+    super.key,
+    this.onSearchReference,
+    this.onBrowseBrands,
+  });
 
+  final VoidCallback? onSearchReference;
   final VoidCallback? onBrowseBrands;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Expanded(
+        Expanded(
           child: QuickActionCard(
             icon: Icons.search,
             title: 'Search a\nReference',
             subtitle: 'By code / marking',
+            onTap: onSearchReference,
           ),
         ),
         const SizedBox(width: 8),
@@ -90,6 +102,7 @@ class QuickActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Semantics(
       button: onTap != null,
       label: title.replaceAll('\n', ' '),
@@ -97,9 +110,9 @@ class QuickActionCard extends StatelessWidget {
         color: Colors.transparent,
         child: Ink(
           decoration: BoxDecoration(
-            color: const Color(0xFF111720),
+            color: palette.surfaceElevated,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFF1D2734)),
+            border: Border.all(color: palette.border),
           ),
           child: InkWell(
             onTap: onTap,
@@ -116,20 +129,20 @@ class QuickActionCard extends StatelessWidget {
                       height: 54,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1B2027),
+                        color: palette.surfaceSubtle,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Icon(
                         icon,
-                        color: const Color(0xFFFFB21A),
+                        color: palette.accent,
                         size: 27,
                       ),
                     ),
                     const Spacer(),
                     Text(
                       title,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: palette.textPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         height: 1.12,
@@ -140,8 +153,8 @@ class QuickActionCard extends StatelessWidget {
                       subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF707985),
+                      style: TextStyle(
+                        color: palette.textMuted,
                         fontSize: 12,
                       ),
                     ),

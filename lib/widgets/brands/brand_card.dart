@@ -1,48 +1,59 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../../models/car_brand.dart';
 
 class BrandCard extends StatelessWidget {
-  const BrandCard({required this.brand, super.key});
+  const BrandCard({required this.brand, this.onTap, super.key});
 
   final CarBrand brand;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Semantics(
       label: '${brand.name} brand',
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0xFF12131E),
+      button: onTap != null,
+      child: Material(
+        color: palette.surfaceElevated,
+        borderRadius: BorderRadius.circular(11),
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(11),
-          border: Border.all(color: const Color(0xFF202433)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _BrandLogo(brand: brand),
-              const Spacer(),
-              Text(
-                brand.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: palette.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _BrandLogo(brand: brand),
+                  const Spacer(),
+                  Text(
+                    brand.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: palette.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${brand.converterCount ?? 0} ${(brand.converterCount ?? 0) == 1 ? 'converter' : 'converters'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: palette.textMuted, fontSize: 9),
+                  ),
+                ],
               ),
-              const SizedBox(height: 5),
-              const Text(
-                'TODO: converter details',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: AppColors.muted, fontSize: 9),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -57,14 +68,15 @@ class _BrandLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return Container(
       width: 58,
       height: 58,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D121A),
+        color: palette.surfaceSubtle,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF263241)),
+        border: Border.all(color: palette.border),
       ),
       child: brand.logoUrl == null
           ? _LogoFallback(name: brand.name)
