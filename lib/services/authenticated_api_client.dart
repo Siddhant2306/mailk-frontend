@@ -43,6 +43,18 @@ class AuthenticatedApiClient {
     return _dio.post(path, data: data, options: options);
   }
 
+  Future<Response<dynamic>> patch(String path, {Object? data}) async {
+    return _dio.patch(
+      path,
+      data: data,
+      options: await createAuthorizedOptions(),
+    );
+  }
+
+  Future<Response<dynamic>> delete(String path) async {
+    return _dio.delete(path, options: await createAuthorizedOptions());
+  }
+
   Future<Options> createAuthorizedOptions() async {
     final user = _firebaseAuth.currentUser;
     if (user == null) {

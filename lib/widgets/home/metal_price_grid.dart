@@ -17,14 +17,19 @@ class MetalPriceGrid extends StatelessWidget {
     required this.isLoading,
     required this.hasLoadedOnce,
     required this.onRetry,
+    required this.onMetalChanged,
+    required this.selectedMetal,
     super.key,
   });
 
   final MarketSnapshot snapshot;
   final PriceUnit selectedUnit;
+  final MetalType selectedMetal;
+  final ValueChanged<MetalType> onMetalChanged;
   final bool isLoading;
   final bool hasLoadedOnce;
   final VoidCallback? onRetry;
+
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +47,8 @@ class MetalPriceGrid extends StatelessWidget {
                 isLoading: isLoading,
                 hasLoadedOnce: hasLoadedOnce,
                 onRetry: onRetry,
+                isSelected: selectedMetal == metal,
+                onTap: () => onMetalChanged(metal),
               ),
             ),
           ),
@@ -61,6 +68,8 @@ class MetalPriceCard extends StatelessWidget {
     required this.isLoading,
     required this.hasLoadedOnce,
     required this.onRetry,
+    required this.isSelected,
+    required this.onTap,
     super.key,
   });
 
@@ -71,6 +80,8 @@ class MetalPriceCard extends StatelessWidget {
   final bool isLoading;
   final bool hasLoadedOnce;
   final VoidCallback? onRetry;
+  final bool isSelected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -81,40 +92,52 @@ class MetalPriceCard extends StatelessWidget {
     final change = quote?.changePercentage;
     final hasChange = change != null && change.isFinite;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: palette.surfaceElevated,
+  return Semantics(
+    button: true,
+    selected: isSelected,
+    label: '${metal.displayName} price card',
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: palette.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _MetalHeading(metal: metal),
-            const SizedBox(height: 2),
-            Text(
-              metal.displayName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: palette.textMuted, fontSize: 8),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: palette.surfaceElevated,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: palette.border),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _MetalHeading(metal: metal),
+                const SizedBox(height: 2),
+                Text(
+                  metal.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: palette.textMuted, fontSize: 8),
+                ),
+                const Spacer(),
+                _PriceText(quote: quote, unit: unit, isLoading: isLoading),
+                const SizedBox(height: 3),
+                if (hasChange)
+                  _PriceChange(change: change)
+                else
+                  _CardStatus(
+                    isLoading: isLoading,
+                    hasLoadedOnce: hasLoadedOnce,
+                    onRetry: onRetry,
+                  ),
+              ],
             ),
-            const Spacer(),
-            _PriceText(quote: quote, unit: unit, isLoading: isLoading),
-            const SizedBox(height: 3),
-            if (hasChange)
-              _PriceChange(change: change)
-            else
-              _CardStatus(
-                isLoading: isLoading,
-                hasLoadedOnce: hasLoadedOnce,
-                onRetry: onRetry,
-              ),
-          ],
+          ),
         ),
       ),
-    );
+    ),
+  );
   }
 }
 

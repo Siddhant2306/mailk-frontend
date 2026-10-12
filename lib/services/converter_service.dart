@@ -43,7 +43,21 @@ class ConverterService {
     if (data is! Map || data['converter_id'] is! int) {
       throw const FormatException('Invalid converter creation response.');
     }
+    _catalogCache.invalidateAll();
     return data['converter_id'] as int;
+  }
+
+  Future<void> updateConverter(int converterId, ConverterDraft draft) async {
+    await _apiClient.patch(
+      ApiConstants.adminConverterDetail(converterId),
+      data: draft.toJson(includeNulls: true),
+    );
+    _catalogCache.invalidateAll();
+  }
+
+  Future<void> deleteConverter(int converterId) async {
+    await _apiClient.delete(ApiConstants.adminConverterDetail(converterId));
+    _catalogCache.invalidateAll();
   }
 
   Future<ConverterCatalogPage> getConverters({
@@ -128,6 +142,7 @@ class ConverterService {
           return ConverterRecord(
             id: converter.id,
             codeReference: converter.codeReference,
+            converterCode: converter.converterCode,
             brandId: converter.brandId,
             brandName: brandName,
             model: converter.model,
@@ -178,11 +193,12 @@ class ConverterService {
       return 'The image service returned an invalid response. Please retry.';
     }
     if (error is AuthenticationRequiredException) {
-      return 'Please sign in again before saving a converter.';
+      return 'Please sign in again before saving or modifying a converter.';
     }
     if (error is DioException) {
-      if (error.response?.statusCode == 401 || error.response?.statusCode == 403) {
-        return 'Admin permission is required to add converters.';
+      if (error.response?.statusCode == 401 ||
+          error.response?.statusCode == 403) {
+        return 'Admin permission is required for converter changes.';
       }
       if (error.response?.statusCode == 422) {
         return 'Please correct the converter fields and try again.';

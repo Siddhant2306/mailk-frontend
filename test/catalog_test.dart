@@ -7,6 +7,7 @@ import 'package:malik/models/converter_draft.dart';
 import 'package:malik/models/converter_record.dart';
 import 'package:malik/screens/brands_screen.dart';
 import 'package:malik/screens/catalog_screen.dart';
+import 'package:malik/screens/converter_detail_screen.dart';
 import 'package:malik/screens/search_screen.dart';
 import 'package:malik/services/brand_service.dart';
 import 'package:malik/services/converter_catalog_cache.dart';
@@ -21,6 +22,7 @@ void main() {
           {
             'id': 42,
             'code_reference': 'ABC-42',
+            'converter_code': 420042,
             'brand_id': 8,
             'model': 'Swift',
             'images': ['https://example.com/converter.png'],
@@ -42,6 +44,7 @@ void main() {
     expect(result.total, 450);
     expect(result.hasMore, isTrue);
     expect(result.converters.single.id, 42);
+    expect(result.converters.single.converterCode, '420042');
     expect(result.converters.single.brandName, 'Suzuki');
     expect(result.converters.single.model, 'Swift');
     expect(result.converters.single.images, [
@@ -66,7 +69,7 @@ void main() {
       search: '',
       brandId: null,
       pageSize: 20,
-      revision: 0,
+      revision: cache.revision(search: '', brandId: null, pageSize: 20),
       page: page,
     );
     expect(
@@ -88,7 +91,7 @@ void main() {
       search: '',
       brandId: null,
       pageSize: 20,
-      revision: 1,
+      revision: cache.revision(search: '', brandId: null, pageSize: 20),
       page: page,
     );
     now = now.add(const Duration(minutes: 6));
@@ -96,6 +99,29 @@ void main() {
       cache.read(search: '', brandId: null, pageSize: 20, page: 1),
       isNull,
     );
+  });
+
+  test('converter mutations use the admin converter endpoints', () async {
+    final apiClient = _FakeAuthenticatedApiClient(responseData: {});
+    final service = ConverterService(
+      apiClient: apiClient,
+      catalogCache: ConverterCatalogCache(),
+    );
+    const draft = ConverterDraft(
+      brandId: 8,
+      codeReference: 'ABC-42',
+      model: 'Swift',
+    );
+
+    await service.updateConverter(42, draft);
+    await service.deleteConverter(42);
+
+    expect(apiClient.requestedPaths, [
+      '/api/v1/admin/converters/42',
+      '/api/v1/admin/converters/42',
+    ]);
+    expect(apiClient.requestedMethods, ['PATCH', 'DELETE']);
+    expect(apiClient.requestedData.single, draft.toJson(includeNulls: true));
   });
 
   test('converter brands use the authenticated API client', () async {
@@ -178,6 +204,65 @@ void main() {
     expect(find.text('40 converters'), findsOneWidget);
     expect(find.text('CAT-1'), findsOneWidget);
     expect(find.byKey(const ValueKey('catalog-add-converter')), findsNothing);
+  });
+
+  testWidgets('converter edit and delete controls are admin-only', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConverterDetailScreen(
+          converterId: 1,
+          converterService: _FakeConverterService(),
+          brandsById: const {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Edit converter'), findsNothing);
+    expect(find.byTooltip('Delete converter'), findsNothing);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConverterDetailScreen(
+          converterId: 1,
+          converterService: _FakeConverterService(),
+          brandsById: const {},
+          isAdmin: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Edit converter'), findsOneWidget);
+    expect(find.byTooltip('Delete converter'), findsOneWidget);
+  });
+
+  testWidgets('converter detail image fills the hero with title overlaid', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConverterDetailScreen(
+          converterId: 1,
+          converterService: _FakeConverterService(),
+          brandsById: const {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final heroImage = find.byWidgetPredicate(
+      (widget) => widget is Image && widget.fit == BoxFit.cover,
+    );
+    expect(heroImage, findsOneWidget);
+    expect(tester.getSize(heroImage).width, 400);
+    expect(find.text('ID  AUTO-1'), findsOneWidget);
+    expect(find.text('Swift'), findsNWidgets(2));
   });
 
   testWidgets(
@@ -400,6 +485,12 @@ class _FakeConverterService implements ConverterService {
   Future<int> createConverter(ConverterDraft draft) async => 0;
 
   @override
+  Future<void> updateConverter(int converterId, ConverterDraft draft) async {}
+
+  @override
+  Future<void> deleteConverter(int converterId) async {}
+
+  @override
   String messageFor(Object error) => 'Request failed.';
 
   @override
@@ -448,10 +539,12 @@ class _FakeConverterService implements ConverterService {
     return ConverterRecord(
       id: converterId,
       codeReference: 'CAT-$converterId',
+      converterCode: 'AUTO-$converterId',
       brandId: 2,
       brandName: 'Suzuki',
       model: 'Swift',
       country: 'India',
+      images: const ['https://example.com/converter.png'],
       markings: const ['86J C04'],
       monolithWeightGrams: 750,
       ptPpm: 400,
@@ -480,6 +573,8 @@ class _FakeAuthenticatedApiClient implements AuthenticatedApiClient {
 
   final dynamic responseData;
   final requestedPaths = <String>[];
+  final requestedMethods = <String>[];
+  final requestedData = <Object?>[];
 
   @override
   Future<Response<dynamic>> get(
@@ -496,6 +591,25 @@ class _FakeAuthenticatedApiClient implements AuthenticatedApiClient {
   @override
   Future<Response<dynamic>> post(String path, {Object? data}) {
     throw UnimplementedError();
+  }
+
+  @override
+  Future<Response<dynamic>> patch(String path, {Object? data}) {
+    requestedPaths.add(path);
+    requestedMethods.add('PATCH');
+    requestedData.add(data);
+    return Future.value(
+      Response<dynamic>(requestOptions: RequestOptions(path: path)),
+    );
+  }
+
+  @override
+  Future<Response<dynamic>> delete(String path) {
+    requestedPaths.add(path);
+    requestedMethods.add('DELETE');
+    return Future.value(
+      Response<dynamic>(requestOptions: RequestOptions(path: path)),
+    );
   }
 
   @override

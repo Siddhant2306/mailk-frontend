@@ -7,18 +7,23 @@ import '../core/theme/app_palette.dart';
 import '../models/converter_record.dart';
 import '../services/authenticated_api_client.dart';
 import '../services/converter_service.dart';
+import '../widgets/profile/converter_form_sheet.dart';
 
 class ConverterDetailScreen extends StatefulWidget {
   const ConverterDetailScreen({
     required this.converterId,
     required this.converterService,
     required this.brandsById,
+    this.isAdmin = false,
+    this.onChanged,
     super.key,
   });
 
   final int converterId;
   final ConverterService converterService;
   final Map<int, String> brandsById;
+  final bool isAdmin;
+  final VoidCallback? onChanged;
 
   @override
   State<ConverterDetailScreen> createState() => _ConverterDetailScreenState();
@@ -79,6 +84,89 @@ class _ConverterDetailScreenState extends State<ConverterDetailScreen> {
     return 'Unable to load converter details. Check your connection and retry.';
   }
 
+  Future<void> _editConverter() async {
+    final converter = _converter;
+    if (!widget.isAdmin || converter == null) {
+      return;
+    }
+    final converterId = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppPalette.of(context).surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => ConverterFormSheet(
+        converterService: widget.converterService,
+        converter: converter,
+      ),
+    );
+    if (!mounted || converterId == null) {
+      return;
+    }
+    widget.onChanged?.call();
+    await _loadConverter();
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Converter updated.')));
+  }
+
+  Future<void> _deleteConverter() async {
+    if (!widget.isAdmin) {
+      return;
+    }
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete converter?'),
+        content: const Text(
+          'This will permanently remove the converter from the database.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (shouldDelete != true || !mounted) {
+      return;
+    }
+
+    try {
+      await widget.converterService.deleteConverter(widget.converterId);
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(_deleteMessageFor(error))));
+    }
+  }
+
+  String _deleteMessageFor(Object error) {
+    if (error is AuthenticationRequiredException) {
+      return 'Please sign in again before deleting this converter.';
+    }
+    if (error is DioException && error.response?.statusCode == 401) {
+      return 'Your session expired. Please sign in again.';
+    }
+    if (error is DioException && error.response?.statusCode == 403) {
+      return 'Admin permission is required to delete converters.';
+    }
+    return 'Could not delete this converter. Check your connection and retry.';
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
@@ -91,31 +179,42 @@ class _ConverterDetailScreenState extends State<ConverterDetailScreen> {
             parent: AlwaysScrollableScrollPhysics(),
           ),
           slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _DetailTopBar(onBack: () => Navigator.of(context).pop()),
-                    if (_isLoading)
-                      const _DetailLoadingState()
-                    else if (_error != null)
-                      _DetailErrorState(
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: _DetailTopBar(
+                      onBack: () => Navigator.of(context).pop(),
+                      isAdmin: widget.isAdmin && converter != null,
+                      onEdit: _editConverter,
+                      onDelete: _deleteConverter,
+                    ),
+                  ),
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      child: _DetailLoadingState(),
+                    )
+                  else if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      child: _DetailErrorState(
                         message: _error!,
                         onRetry: _loadConverter,
-                      )
-                    else if (converter != null)
-                      _ConverterDetails(
-                        converter: converter,
-                        brandName:
-                            converter.brandName ??
-                            (converter.brandId == null
-                                ? null
-                                : widget.brandsById[converter.brandId]),
                       ),
-                  ],
-                ),
+                    )
+                  else if (converter != null)
+                    _ConverterDetails(
+                      converter: converter,
+                      brandName:
+                          converter.brandName ??
+                          (converter.brandId == null
+                              ? null
+                              : widget.brandsById[converter.brandId]),
+                    ),
+                ],
               ),
             ),
           ],
@@ -126,9 +225,17 @@ class _ConverterDetailScreenState extends State<ConverterDetailScreen> {
 }
 
 class _DetailTopBar extends StatelessWidget {
-  const _DetailTopBar({required this.onBack});
+  const _DetailTopBar({
+    required this.onBack,
+    required this.isAdmin,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   final VoidCallback onBack;
+  final bool isAdmin;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -169,7 +276,29 @@ class _DetailTopBar extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 40),
+          if (isAdmin)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Edit converter',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onEdit,
+                  icon: Icon(Icons.edit_outlined, color: palette.accent),
+                ),
+                IconButton(
+                  tooltip: 'Delete converter',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onDelete,
+                  icon: Icon(
+                    Icons.delete_outline,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+              ],
+            )
+          else
+            const SizedBox(width: 40),
         ],
       ),
     );
@@ -184,107 +313,235 @@ class _ConverterDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppPalette.of(context);
     final title = converter.model?.isNotEmpty == true
         ? converter.model!
         : converter.codeReference;
+    final converterCode = converter.converterCode.isNotEmpty
+        ? converter.converterCode
+        : converter.codeReference.isNotEmpty
+        ? converter.codeReference
+        : converter.id.toString();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 22),
-        Text(
-          title.isEmpty ? 'Converter ${converter.id}' : title,
-          style: TextStyle(
-            color: palette.textPrimary,
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
-          ),
+        _ConverterHero(
+          imageUrl: converter.images.firstOrNull,
+          converterCode: converterCode,
+          title: title.isEmpty ? 'Converter ${converter.id}' : title,
+          brandName: brandName,
         ),
-        if (brandName != null) ...[
-          const SizedBox(height: 3),
-          Text(
-            brandName!,
-            style: TextStyle(color: palette.textMuted, fontSize: 14),
-          ),
-        ],
-        if (converter.images.isNotEmpty) ...[
-          const SizedBox(height: 22),
-          _DetailImages(images: converter.images),
-        ],
-        const SizedBox(height: 25),
-        const _SectionTitle('DETAILS'),
-        const SizedBox(height: 9),
-        _DetailCard(
-          rows: [
-            _DetailRow('Reference', _orDash(converter.codeReference)),
-            _DetailRow('Make', _orDash(brandName)),
-            _DetailRow('Model', _orDash(converter.model)),
-            _DetailRow('Country', _orDash(converter.country)),
-            _DetailRow(
-              'Monolith Wt',
-              converter.monolithWeightGrams == null
-                  ? '—'
-                  : '${_formatNumber(converter.monolithWeightGrams!)} g',
-            ),
-            _DetailRow('Converter Type', _orDash(converter.converterType)),
-            _DetailRow('Category', _orDash(converter.category)),
-            _DetailRow('Local Lingo', _orDash(converter.localLingo)),
-          ],
-        ),
-        if (converter.markings.isNotEmpty) ...[
-          const SizedBox(height: 24),
-          const _SectionTitle('MARKINGS'),
-          const SizedBox(height: 9),
-          _DetailCard(
-            rows: [
-              for (var index = 0; index < converter.markings.length; index++)
-                _DetailRow('${index + 1}.', converter.markings[index]),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _SectionTitle('DETAILS'),
+              const SizedBox(height: 9),
+              _DetailCard(
+                rows: [
+                  _DetailRow('Reference', _orDash(converter.codeReference)),
+                  _DetailRow('Make', _orDash(brandName)),
+                  _DetailRow('Model', _orDash(converter.model)),
+                  _DetailRow('Country', _orDash(converter.country)),
+                  _DetailRow(
+                    'Monolith Wt',
+                    converter.monolithWeightGrams == null
+                        ? '—'
+                        : '${_formatNumber(converter.monolithWeightGrams!)} g',
+                  ),
+                  _DetailRow(
+                    'Converter Type',
+                    _orDash(converter.converterType),
+                  ),
+                  _DetailRow('Category', _orDash(converter.category)),
+                  _DetailRow('Local Lingo', _orDash(converter.localLingo)),
+                ],
+              ),
+              if (converter.images.length > 1) ...[
+                const SizedBox(height: 24),
+                _DetailImages(images: converter.images.skip(1).toList()),
+              ],
+              if (converter.markings.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                const _SectionTitle('MARKINGS'),
+                const SizedBox(height: 9),
+                _DetailCard(
+                  rows: [
+                    for (
+                      var index = 0;
+                      index < converter.markings.length;
+                      index++
+                    )
+                      _DetailRow('${index + 1}.', converter.markings[index]),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 24),
+              const _SectionTitle('PGM CONTENT'),
+              const SizedBox(height: 9),
+              Row(
+                children: [
+                  Expanded(
+                    child: _MetalContentCard(
+                      label: 'PLATINUM',
+                      value: converter.ptPpm,
+                      icon: Icons.hub_outlined,
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: _MetalContentCard(
+                      label: 'PALLADIUM',
+                      value: converter.pdPpm,
+                      icon: Icons.refresh,
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: _MetalContentCard(
+                      label: 'RHODIUM',
+                      value: converter.rhPpm,
+                      icon: Icons.wb_sunny_outlined,
+                    ),
+                  ),
+                ],
+              ),
+              if (converter.remarks?.isNotEmpty == true) ...[
+                const SizedBox(height: 24),
+                const _SectionTitle('REMARKS'),
+                const SizedBox(height: 9),
+                _TextDetailCard(text: converter.remarks!),
+              ],
+              if (converter.notes?.isNotEmpty == true) ...[
+                const SizedBox(height: 24),
+                const _SectionTitle('NOTES'),
+                const SizedBox(height: 9),
+                _TextDetailCard(text: converter.notes!),
+              ],
             ],
           ),
-        ],
-        const SizedBox(height: 24),
-        const _SectionTitle('PGM CONTENT'),
-        const SizedBox(height: 9),
-        Row(
-          children: [
-            Expanded(
-              child: _MetalContentCard(
-                label: 'PLATINUM',
-                value: converter.ptPpm,
-                icon: Icons.hub_outlined,
-              ),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: _MetalContentCard(
-                label: 'PALLADIUM',
-                value: converter.pdPpm,
-                icon: Icons.refresh,
-              ),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: _MetalContentCard(
-                label: 'RHODIUM',
-                value: converter.rhPpm,
-                icon: Icons.wb_sunny_outlined,
-              ),
-            ),
-          ],
         ),
-        if (converter.remarks?.isNotEmpty == true) ...[
-          const SizedBox(height: 24),
-          const _SectionTitle('REMARKS'),
-          const SizedBox(height: 9),
-          _TextDetailCard(text: converter.remarks!),
-        ],
-        if (converter.notes?.isNotEmpty == true) ...[
-          const SizedBox(height: 24),
-          const _SectionTitle('NOTES'),
-          const SizedBox(height: 9),
-          _TextDetailCard(text: converter.notes!),
-        ],
       ],
+    );
+  }
+}
+
+class _ConverterHero extends StatelessWidget {
+  const _ConverterHero({
+    required this.imageUrl,
+    required this.converterCode,
+    required this.title,
+    required this.brandName,
+  });
+
+  final String? imageUrl;
+  final String converterCode;
+  final String title;
+  final String? brandName;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final uri = imageUrl == null ? null : _resolveImageUrl(imageUrl!);
+    final heroHeight = MediaQuery.sizeOf(context).width * 0.76;
+
+    return SizedBox(
+      height: heroHeight,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ColoredBox(
+            color: palette.surfaceElevated,
+            child: uri == null
+                ? Icon(Icons.image_outlined, color: palette.textMuted, size: 42)
+                : Image.network(
+                    uri,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Center(
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: palette.textMuted,
+                        size: 36,
+                      ),
+                    ),
+                  ),
+          ),
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0x00000000),
+                  Color(0x1A000000),
+                  Color(0xD9000000),
+                ],
+                stops: [0.25, 0.58, 1],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 26,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.accent, width: 1.2),
+                    borderRadius: BorderRadius.circular(5),
+                    color: const Color(0x3310141C),
+                  ),
+                  child: Text(
+                    'ID  $converterCode',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.accent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: palette.textPrimary,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    shadows: const [
+                      Shadow(color: Colors.black54, blurRadius: 8),
+                    ],
+                  ),
+                ),
+                if (brandName != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    brandName!,
+                    style: TextStyle(
+                      color: palette.textPrimary.withValues(alpha: 0.9),
+                      fontSize: 14,
+                      shadows: const [
+                        Shadow(color: Colors.black54, blurRadius: 8),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -315,10 +572,7 @@ class _DetailImages extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: uri == null
-                  ? Icon(
-                      Icons.broken_image_outlined,
-                      color: palette.textMuted,
-                    )
+                  ? Icon(Icons.broken_image_outlined, color: palette.textMuted)
                   : Image.network(
                       uri,
                       fit: BoxFit.cover,
@@ -380,9 +634,7 @@ class _DetailCard extends StatelessWidget {
               decoration: BoxDecoration(
                 border: index == rows.length - 1
                     ? null
-                    : Border(
-                        bottom: BorderSide(color: palette.border),
-                      ),
+                    : Border(bottom: BorderSide(color: palette.border)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,10 +642,7 @@ class _DetailCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       rows[index].label,
-                      style: TextStyle(
-                        color: palette.textMuted,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: palette.textMuted, fontSize: 12),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -549,11 +798,7 @@ class _DetailErrorState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.cloud_off_outlined,
-            color: palette.textMuted,
-            size: 32,
-          ),
+          Icon(Icons.cloud_off_outlined, color: palette.textMuted, size: 32),
           const SizedBox(height: 10),
           Text(
             message,

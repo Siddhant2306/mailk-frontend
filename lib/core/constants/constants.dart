@@ -12,4 +12,6 @@ class ApiConstants {
 
   static String converterDetail(int converterId) =>
       '$converterCatalog/$converterId';
+  static String adminConverterDetail(int converterId) =>
+      '$converters/$converterId';
 }

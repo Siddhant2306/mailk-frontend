@@ -175,6 +175,7 @@ class _HomeScreenState extends State<HomeScreen> {
           2 => SearchScreen(
             converterService: widget.converterService,
             brandService: widget.brandService,
+            isAdmin: widget.currentUser?.isAdmin == true,
           ),
           3 => CatalogScreen(
             converterService: widget.converterService,
@@ -244,6 +245,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     reloadLivePrices: true,
                     forceRefresh: true,
                   ),
+            onMetalChanged: _selectMetal,
+            selectedMetal: _selectedMetal,
           ),
           const SizedBox(height: 12),
         ],

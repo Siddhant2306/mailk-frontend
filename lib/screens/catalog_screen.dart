@@ -417,16 +417,31 @@ class _CatalogScreenState extends State<CatalogScreen> {
     return null;
   }
 
-  void _openDetails(ConverterRecord converter) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
+  Future<void> _openDetails(ConverterRecord converter) async {
+    final wasDeleted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
         builder: (_) => ConverterDetailScreen(
           converterId: converter.id,
           converterService: _converterService,
           brandsById: _brandsById,
+          isAdmin: widget.isAdmin,
+          onChanged: () {
+            if (mounted) {
+              _loadFirstPage(forceRefresh: true);
+            }
+          },
         ),
       ),
     );
+    if (!mounted || wasDeleted != true) {
+      return;
+    }
+    await _loadFirstPage(forceRefresh: true);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Converter deleted.')),
+      );
+    }
   }
 
   Future<void> _openAddConverter() async {
@@ -634,9 +649,11 @@ class _ConverterCard extends StatelessWidget {
     final marking = converter.markings.isEmpty
         ? '—'
         : converter.markings.join(', ');
-    final code = converter.codeReference.isEmpty
-        ? 'Converter ${converter.id}'
-        : converter.codeReference;
+    final code = converter.converterCode.isNotEmpty
+          ? converter.converterCode
+          : (converter.codeReference.isNotEmpty
+          ? converter.codeReference
+          : 'Converter ${converter.id}');
     final weight = converter.monolithWeightGrams == null
         ? '—'
         : _formatWeight(converter.monolithWeightGrams!);
@@ -677,9 +694,19 @@ class _ConverterCard extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Text(
+                          code,
+                          style: const TextStyle(
+                            color: Color(0xFFFFB02E),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         _CatalogField(
-                          label: 'Code:',
-                          value: code,
+                          label: 'Reference:',
+                          value:  converter.codeReference.isNotEmpty ? converter.codeReference : '—',
                           searchQuery: searchQuery,
                           valueColor: palette.accent,
                           emphasized: true,
@@ -701,7 +728,7 @@ class _ConverterCard extends StatelessWidget {
                         ),
                         _CatalogField(
                           label: 'Country:',
-                          value: converter.country ?? '—',
+                          value: converter.country ?? 'India',
                           searchQuery: searchQuery,
                         ),
                         _CatalogField(

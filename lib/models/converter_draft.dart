@@ -31,20 +31,21 @@ class ConverterDraft {
   final String? remarks;
   final String? notes;
 
-  Map<String, dynamic> toJson() => {
+  Map<String, dynamic> toJson({bool includeNulls = false}) => {
     'brand_id': brandId,
     'code_reference': codeReference,
-    if (model != null) 'model': model,
-    if (converterType != null) 'converter_type': converterType,
-    if (category != null) 'category': category,
-    if (localLingo != null) 'local_lingo': localLingo,
-    if (monolithWeightGrams != null) 'monolith_weight_g': monolithWeightGrams,
-    if (ptPpm != null) 'pt_ppm': ptPpm,
-    if (pdPpm != null) 'pd_ppm': pdPpm,
-    if (rhPpm != null) 'rh_ppm': rhPpm,
+    if (includeNulls || model != null) 'model': model,
+    if (includeNulls || converterType != null) 'converter_type': converterType,
+    if (includeNulls || category != null) 'category': category,
+    if (includeNulls || localLingo != null) 'local_lingo': localLingo,
+    if (includeNulls || monolithWeightGrams != null)
+      'monolith_weight_g': monolithWeightGrams,
+    if (includeNulls || ptPpm != null) 'pt_ppm': ptPpm,
+    if (includeNulls || pdPpm != null) 'pd_ppm': pdPpm,
+    if (includeNulls || rhPpm != null) 'rh_ppm': rhPpm,
     'markings': markings,
     'images': images,
-    if (remarks != null) 'remarks': remarks,
-    if (notes != null) 'notes': notes,
+    if (includeNulls || remarks != null) 'remarks': remarks,
+    if (includeNulls || notes != null) 'notes': notes,
   };
 }

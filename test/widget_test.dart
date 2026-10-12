@@ -134,6 +134,21 @@ void main() {
     });
   });
 
+  test('parses converter records with an absent or null generated code', () {
+    final olderRecord = ConverterRecord.fromJson({
+      'id': 21,
+      'code_reference': 'OLD-21',
+    });
+    final nullGeneratedCode = ConverterRecord.fromJson({
+      'id': 22,
+      'code_reference': 'NEW-22',
+      'converter_code': null,
+    });
+
+    expect(olderRecord.converterCode, isEmpty);
+    expect(nullGeneratedCode.converterCode, isEmpty);
+  });
+
   testWidgets('keeps metal cards visible and lets the chart unit change', (
     tester,
   ) async {
@@ -225,7 +240,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData(extensions: const [AppPalette.light]),
-        home: const Scaffold(
+        home: Scaffold(
           body: Center(
             child: MetalPriceCard(
               metal: MetalType.platinum,
@@ -235,6 +250,8 @@ void main() {
               isLoading: false,
               hasLoadedOnce: true,
               onRetry: null,
+              isSelected: true,
+              onTap: () {},
             ),
           ),
         ),
@@ -246,8 +263,14 @@ void main() {
       (card.decoration as BoxDecoration).color,
       AppPalette.light.surfaceElevated,
     );
-    expect(AppPalette.of(tester.element(find.byType(MetalPriceCard))).textPrimary,
-        AppPalette.light.textPrimary);
+    expect(
+      ((card.decoration as BoxDecoration).border! as Border).top.color,
+      AppPalette.light.border,
+    );
+    expect(
+      AppPalette.of(tester.element(find.byType(MetalPriceCard))).textPrimary,
+      AppPalette.light.textPrimary,
+    );
   });
 
   testWidgets('shows the admin profile for an approved admin', (tester) async {
@@ -382,6 +405,8 @@ void main() {
   });
 }
 
+void sEtState(Null Function() param0) {}
+
 class _FakeMetalService extends MetalService {
   @override
   Future<Map<MetalType, MetalLivePrice?>> getLiveQuotes({
@@ -493,6 +518,12 @@ class _FakeConverterService implements ConverterService {
 
   @override
   Future<int> createConverter(ConverterDraft draft) async => 1;
+
+  @override
+  Future<void> updateConverter(int converterId, ConverterDraft draft) async {}
+
+  @override
+  Future<void> deleteConverter(int converterId) async {}
 
   @override
   Future<String> uploadConverterImage({

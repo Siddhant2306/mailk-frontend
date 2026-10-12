@@ -9,10 +9,12 @@ class SearchScreen extends StatelessWidget {
     super.key,
     this.converterService,
     this.brandService,
+    this.isAdmin = false,
   });
 
   final ConverterService? converterService;
   final BrandService? brandService;
+  final bool isAdmin;
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +22,7 @@ class SearchScreen extends StatelessWidget {
       converterService: converterService,
       brandService: brandService,
       searchMode: true,
+      isAdmin: isAdmin,
     );
   }
 }

@@ -7,12 +7,18 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_palette.dart';
 import '../../models/converter_draft.dart';
+import '../../models/converter_record.dart';
 import '../../services/converter_service.dart';
 
 class ConverterFormSheet extends StatefulWidget {
-  const ConverterFormSheet({required this.converterService, super.key});
+  const ConverterFormSheet({
+    required this.converterService,
+    this.converter,
+    super.key,
+  });
 
   final ConverterService converterService;
+  final ConverterRecord? converter;
 
   @override
   State<ConverterFormSheet> createState() => _ConverterFormSheetState();
@@ -30,7 +36,10 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
   final _ptController = TextEditingController();
   final _pdController = TextEditingController();
   final _rhController = TextEditingController();
-  final _markingsController = TextEditingController();
+  final List<TextEditingController> _markingControllers = [TextEditingController(),];
+  final TextEditingController _markingInputController = TextEditingController();
+  final List<String> _markings = [];
+  final List<String> _existingImages = [];
   final _remarksController = TextEditingController();
   final _notesController = TextEditingController();
   final _imagePicker = ImagePicker();
@@ -39,6 +48,29 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
   var _isSaving = false;
   var _isPickingImage = false;
   var _step = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final converter = widget.converter;
+    if (converter == null) {
+      return;
+    }
+    _brandIdController.text = converter.brandId?.toString() ?? '';
+    _codeController.text = converter.codeReference;
+    _modelController.text = converter.model ?? '';
+    _typeController.text = converter.converterType ?? '';
+    _categoryController.text = converter.category ?? '';
+    _localLingoController.text = converter.localLingo ?? '';
+    _weightController.text = converter.monolithWeightGrams?.toString() ?? '';
+    _ptController.text = converter.ptPpm?.toString() ?? '';
+    _pdController.text = converter.pdPpm?.toString() ?? '';
+    _rhController.text = converter.rhPpm?.toString() ?? '';
+    _markings.addAll(converter.markings);
+    _existingImages.addAll(converter.images);
+    _remarksController.text = converter.remarks ?? '';
+    _notesController.text = converter.notes ?? '';
+  }
 
   @override
   void dispose() {
@@ -53,12 +85,13 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
       _ptController,
       _pdController,
       _rhController,
-      _markingsController,
       _remarksController,
       _notesController,
+      ..._markingControllers,
     ]) {
       controller.dispose();
     }
+    _markingInputController.dispose();
     super.dispose();
   }
 
@@ -69,7 +102,7 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
 
     setState(() => _isSaving = true);
     try {
-      final imageUrls = <String>[];
+      final imageUrls = List<String>.of(_existingImages);
       for (final image in _pendingImages) {
         imageUrls.add(
           await widget.converterService.uploadConverterImage(
@@ -79,24 +112,25 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
         );
       }
 
-      final converterId = await widget.converterService.createConverter(
-        ConverterDraft(
-          brandId: int.parse(_brandIdController.text.trim()),
-          codeReference: _codeController.text.trim(),
-          model: _optional(_modelController),
-          converterType: _optional(_typeController),
-          category: _optional(_categoryController),
-          localLingo: _optional(_localLingoController),
-          monolithWeightGrams: _optionalNumber(_weightController),
-          ptPpm: _optionalNumber(_ptController),
-          pdPpm: _optionalNumber(_pdController),
-          rhPpm: _optionalNumber(_rhController),
-          markings: _items(_markingsController),
-          images: imageUrls,
-          remarks: _optional(_remarksController),
-          notes: _optional(_notesController),
-        ),
+      final draft = ConverterDraft(
+        brandId: int.parse(_brandIdController.text.trim()),
+        codeReference: _codeController.text.trim(),
+        model: _optional(_modelController),
+        converterType: _optional(_typeController),
+        category: _optional(_categoryController),
+        localLingo: _optional(_localLingoController),
+        monolithWeightGrams: _optionalNumber(_weightController),
+        ptPpm: _optionalNumber(_ptController),
+        pdPpm: _optionalNumber(_pdController),
+        rhPpm: _optionalNumber(_rhController),
+        markings: _markings,
+        images: imageUrls,
+        remarks: _optional(_remarksController),
+        notes: _optional(_notesController),
       );
+      final converterId = widget.converter == null
+          ? await widget.converterService.createConverter(draft)
+          : await _updateConverter(draft);
       if (mounted) {
         Navigator.pop(context, converterId);
       }
@@ -113,6 +147,12 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
     }
   }
 
+  Future<int> _updateConverter(ConverterDraft draft) async {
+    final converter = widget.converter!;
+    await widget.converterService.updateConverter(converter.id, draft);
+    return converter.id;
+  }
+
   String? _optional(TextEditingController controller) {
     final value = controller.text.trim();
     return value.isEmpty ? null : value;
@@ -120,14 +160,6 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
 
   double? _optionalNumber(TextEditingController controller) {
     return double.tryParse(controller.text.trim());
-  }
-
-  List<String> _items(TextEditingController controller) {
-    return controller.text
-        .split(RegExp(r'[,\n]'))
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toList();
   }
 
   Future<void> _pickDeviceImages() async {
@@ -189,13 +221,25 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
     setState(() => _pendingImages.removeAt(index));
   }
 
-  void _continueToMetrics() {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _step = 1);
+  void _removeExistingImage(int index) {
+    setState(() => _existingImages.removeAt(index));
   }
 
   void _goToIdentification() {
     setState(() => _step = 0);
+  }
+
+  void _addMarking() {
+    final marking = _markingInputController.text.trim();
+
+    if (marking.isEmpty) return;
+
+    setState(() {
+      if (!_markings.contains(marking)) {
+        _markings.add(marking);
+      }
+      _markingInputController.clear();
+    });
   }
 
   @override
@@ -226,9 +270,13 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
                       child: SingleChildScrollView(
                         keyboardDismissBehavior:
                             ScrollViewKeyboardDismissBehavior.onDrag,
-                        child: _step == 0
-                            ? _buildIdentificationStep()
-                            : _buildMetricsStep(),
+                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildIdentificationStep(),
+                            _buildMetricsStep(),
+                          ],
+                        ),
                       ),
                     ),
                     _buildBottomAction(),
@@ -286,7 +334,9 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
                   ),
                   SizedBox(height: 3),
                   Text(
-                    'Add Converter',
+                    widget.converter == null
+                        ? 'Add Converter'
+                        : 'Edit Converter',
                     style: TextStyle(
                       color: palette.textPrimary,
                       fontSize: 19,
@@ -294,23 +344,6 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
                     ),
                   ),
                 ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              decoration: BoxDecoration(
-                color: palette.surfaceElevated,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: palette.border),
-              ),
-              child: Text(
-                'STEP ${_step + 1} OF 2',
-                style: TextStyle(
-                  color: palette.textMuted,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1,
-                ),
               ),
             ),
           ],
@@ -354,6 +387,59 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
             minHeight: 2,
             color: palette.accent,
             backgroundColor: palette.border,
+          ),
+        ],
+        if (_existingImages.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 76,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _existingImages.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) => Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      _existingImages[index],
+                      width: 76,
+                      height: 76,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => ColoredBox(
+                        color: palette.surfaceSubtle,
+                        child: SizedBox(
+                          width: 76,
+                          height: 76,
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            color: palette.textMuted,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 2,
+                    right: 2,
+                    child: GestureDetector(
+                      onTap: _isSaving
+                          ? null
+                          : () => _removeExistingImage(index),
+                      child: const CircleAvatar(
+                        radius: 11,
+                        backgroundColor: Colors.black87,
+                        child: Icon(
+                          Icons.close,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
         if (_pendingImages.isNotEmpty) ...[
@@ -441,11 +527,8 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
           runSpacing: 7,
           children: [
             for (final type in const [
-              'Standard',
-              'Ceramic',
-              'Metallic',
-              'DPF',
-              'Universal',
+              'Ceramic + DPF',
+              'Metallic + DPF',
             ])
               ChoiceChip(
                 label: Text(type),
@@ -491,12 +574,54 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
       children: [
         const _SectionLabel('METRICS & MARKINGS'),
         const _SectionLabel('MARKINGS & STAMP CODES'),
-        _AdminField(
-          controller: _markingsController,
-          label: 'Markings',
-          hintText: 'Comma or line-separated codes',
-          maxLines: 2,
-        ),
+        Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _AdminField(
+                      controller: _markingInputController,
+                      label: 'Markings & Stamp Codes',
+                      hintText: 'e.g., ESH 72, 18160-RNA',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 50,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _addMarking,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: EdgeInsets.zero,
+                      ),
+                      child: const Icon(Icons.add, color: Colors.black),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _markings.map((marking) {
+                  return Chip(
+                    label: Text(marking),
+                    onDeleted: () {
+                      setState(() {
+                        _markings.remove(marking);
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        const SizedBox(height: 12),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(12),
@@ -633,54 +758,46 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
   }
 
   Widget _buildBottomAction() {
-    final isFinalStep = _step == 1;
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: SizedBox(
-        width: double.infinity,
-        height: 50,
-        child: ElevatedButton.icon(
-          onPressed: _isSaving
-              ? null
-              : isFinalStep
-              ? _submit
-              : _continueToMetrics,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.accent,
-            foregroundColor: Colors.black,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+  return Padding(
+    padding: const EdgeInsets.only(top: 10),
+    child: SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: ElevatedButton.icon(
+        onPressed: _isSaving ? null : _submit,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.accent,
+          foregroundColor: Colors.black,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-          icon: _isSaving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.black,
-                  ),
-                )
-              : Icon(
-                  isFinalStep ? Icons.save_outlined : Icons.arrow_forward,
-                  size: 19,
+        ),
+        icon: _isSaving
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.black,
                 ),
-          label: Text(
-            _isSaving
-                ? 'Saving…'
-                : isFinalStep
-                ? 'SAVE CONVERTER'
-                : 'CONTINUE TO METRICS',
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              letterSpacing: .4,
-            ),
+              )
+            : const Icon(Icons.save_outlined, size: 19),
+        label: Text(
+          _isSaving
+              ? 'Saving…'
+              : widget.converter == null
+              ? 'SAVE CONVERTER'
+              : 'SAVE CHANGES',
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            letterSpacing: .4,
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildCountryOfOrigin() {
     final palette = AppPalette.of(context);

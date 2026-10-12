@@ -12,6 +12,7 @@ class ConverterCatalogCache {
   final DateTime Function() _clock;
   final Map<String, Map<int, _CachedCatalogPage>> _pages = {};
   final Map<String, int> _revisions = {};
+  var _generation = 0;
 
   ConverterCatalogPage? read({
     required String search,
@@ -35,23 +36,27 @@ class ConverterCatalogCache {
     return cachedPage.page;
   }
 
-  int revision({
+  ({int generation, int revision}) revision({
     required String search,
     required int? brandId,
     required int pageSize,
   }) {
-    return _revisions[_key(search, brandId, pageSize)] ?? 0;
+    return (
+      generation: _generation,
+      revision: _revisions[_key(search, brandId, pageSize)] ?? 0,
+    );
   }
 
   void write({
     required String search,
     required int? brandId,
     required int pageSize,
-    required int revision,
+    required ({int generation, int revision}) revision,
     required ConverterCatalogPage page,
   }) {
     final key = _key(search, brandId, pageSize);
-    if ((_revisions[key] ?? 0) != revision) {
+    if (revision.generation != _generation ||
+        (_revisions[key] ?? 0) != revision.revision) {
       return;
     }
     final cachedPages = _pages.putIfAbsent(key, () => {});
@@ -69,6 +74,12 @@ class ConverterCatalogCache {
     final key = _key(search, brandId, pageSize);
     _pages.remove(key);
     _revisions.update(key, (revision) => revision + 1, ifAbsent: () => 1);
+  }
+
+  void invalidateAll() {
+    _pages.clear();
+    _revisions.clear();
+    _generation++;
   }
 
   String _key(String search, int? brandId, int pageSize) {

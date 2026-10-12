@@ -2,6 +2,7 @@ class ConverterRecord {
   const ConverterRecord({
     required this.id,
     required this.codeReference,
+    this.converterCode = '',
     this.brandId,
     this.brandName,
     this.model,
@@ -44,6 +45,7 @@ class ConverterRecord {
           _text(json['reference']) ??
           _text(json['code']) ??
           '',
+      converterCode: _text(json['converter_code']) ?? '',
       brandId: brandId,
       brandName: brandName,
       model: _text(json['model']),
@@ -69,6 +71,7 @@ class ConverterRecord {
 
   final int id;
   final String codeReference;
+  final String converterCode;
   final int? brandId;
   final String? brandName;
   final String? model;

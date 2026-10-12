@@ -58,7 +58,7 @@ class MarketChart extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                '${selectedMetal.displayName} trend • ${selectedUnit.chartLabel}',
+                '${selectedMetal.displayName} • ${selectedUnit.chartLabel}',
                 style: TextStyle(
                   color: palette.textPrimary,
                   fontSize: 14,
@@ -286,7 +286,7 @@ class _UnitButton extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: isSelected ? palette.accentSoft : palette.surfaceSubtle,
+            color: Colors.transparent,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
               color: isSelected ? palette.accent : palette.border,
