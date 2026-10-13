@@ -6,6 +6,7 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_palette.dart';
 import '../models/converter_record.dart';
 import '../services/authenticated_api_client.dart';
+import '../services/brand_service.dart';
 import '../services/converter_service.dart';
 import '../widgets/profile/converter_form_sheet.dart';
 
@@ -14,6 +15,7 @@ class ConverterDetailScreen extends StatefulWidget {
     required this.converterId,
     required this.converterService,
     required this.brandsById,
+    this.brandService,
     this.isAdmin = false,
     this.onChanged,
     super.key,
@@ -22,6 +24,7 @@ class ConverterDetailScreen extends StatefulWidget {
   final int converterId;
   final ConverterService converterService;
   final Map<int, String> brandsById;
+  final BrandService? brandService;
   final bool isAdmin;
   final VoidCallback? onChanged;
 
@@ -98,6 +101,7 @@ class _ConverterDetailScreenState extends State<ConverterDetailScreen> {
       ),
       builder: (_) => ConverterFormSheet(
         converterService: widget.converterService,
+        brandService: widget.brandService,
         converter: converter,
       ),
     );
@@ -325,7 +329,7 @@ class _ConverterDetails extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _ConverterHero(
-          imageUrl: converter.images.firstOrNull,
+          images: converter.images,
           converterCode: converterCode,
           title: title.isEmpty ? 'Converter ${converter.id}' : title,
           brandName: brandName,
@@ -355,27 +359,14 @@ class _ConverterDetails extends StatelessWidget {
                   ),
                   _DetailRow('Category', _orDash(converter.category)),
                   _DetailRow('Local Lingo', _orDash(converter.localLingo)),
+                  if (converter.markings.isNotEmpty)
+                    _DetailRow(
+                      'Markings',
+                      converter.markings.join('\n'),
+                      valueAlignment: TextAlign.left,
+                    ),
                 ],
               ),
-              if (converter.images.length > 1) ...[
-                const SizedBox(height: 24),
-                _DetailImages(images: converter.images.skip(1).toList()),
-              ],
-              if (converter.markings.isNotEmpty) ...[
-                const SizedBox(height: 24),
-                const _SectionTitle('MARKINGS'),
-                const SizedBox(height: 9),
-                _DetailCard(
-                  rows: [
-                    for (
-                      var index = 0;
-                      index < converter.markings.length;
-                      index++
-                    )
-                      _DetailRow('${index + 1}.', converter.markings[index]),
-                  ],
-                ),
-              ],
               const SizedBox(height: 24),
               const _SectionTitle('PGM CONTENT'),
               const SizedBox(height: 9),
@@ -385,7 +376,7 @@ class _ConverterDetails extends StatelessWidget {
                     child: _MetalContentCard(
                       label: 'PLATINUM',
                       value: converter.ptPpm,
-                      icon: Icons.hub_outlined,
+                      symbol: 'Pt',
                     ),
                   ),
                   const SizedBox(width: 9),
@@ -393,7 +384,7 @@ class _ConverterDetails extends StatelessWidget {
                     child: _MetalContentCard(
                       label: 'PALLADIUM',
                       value: converter.pdPpm,
-                      icon: Icons.refresh,
+                      symbol: 'Pd',
                     ),
                   ),
                   const SizedBox(width: 9),
@@ -401,7 +392,7 @@ class _ConverterDetails extends StatelessWidget {
                     child: _MetalContentCard(
                       label: 'RHODIUM',
                       value: converter.rhPpm,
-                      icon: Icons.wb_sunny_outlined,
+                      symbol: 'Rh',
                     ),
                   ),
                 ],
@@ -426,28 +417,49 @@ class _ConverterDetails extends StatelessWidget {
   }
 }
 
-class _ConverterHero extends StatelessWidget {
+class _ConverterHero extends StatefulWidget {
   const _ConverterHero({
-    required this.imageUrl,
+    required this.images,
     required this.converterCode,
     required this.title,
     required this.brandName,
   });
 
-  final String? imageUrl;
+  final List<String> images;
   final String converterCode;
   final String title;
   final String? brandName;
 
   @override
+  State<_ConverterHero> createState() => _ConverterHeroState();
+}
+
+class _ConverterHeroState extends State<_ConverterHero> {
+  var _imageIndex = 0;
+
+  @override
+  void didUpdateWidget(covariant _ConverterHero oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_imageIndex >= widget.images.length) {
+      _imageIndex = 0;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
-    final uri = imageUrl == null ? null : _resolveImageUrl(imageUrl!);
-    final heroHeight = MediaQuery.sizeOf(context).width * 0.76;
-
-    return SizedBox(
-      height: heroHeight,
-      child: Stack(
+    final uri = widget.images.isEmpty
+        ? null
+        : _resolveImageUrl(widget.images[_imageIndex]);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final heroHeight = (constraints.maxWidth * 0.9)
+            .clamp(340.0, 480.0)
+            .toDouble();
+        return SizedBox(
+          key: const ValueKey('converter-detail-image-hero'),
+          height: heroHeight,
+          child: Stack(
         fit: StackFit.expand,
         children: [
           ColoredBox(
@@ -456,7 +468,8 @@ class _ConverterHero extends StatelessWidget {
                 ? Icon(Icons.image_outlined, color: palette.textMuted, size: 42)
                 : Image.network(
                     uri,
-                    fit: BoxFit.cover,
+                    fit: BoxFit.contain,
+                    key: ValueKey(uri),
                     errorBuilder: (_, _, _) => Center(
                       child: Icon(
                         Icons.broken_image_outlined,
@@ -466,17 +479,92 @@ class _ConverterHero extends StatelessWidget {
                     ),
                   ),
           ),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0x00000000),
-                  Color(0x1A000000),
-                  Color(0xD9000000),
-                ],
-                stops: [0.25, 0.58, 1],
+          if (widget.images.length > 1) ...[
+            Positioned(
+              left: 8,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: IconButton.filledTonal(
+                  tooltip: 'Previous image',
+                  onPressed: () => setState(
+                    () => _imageIndex =
+                        (_imageIndex - 1 + widget.images.length) %
+                        widget.images.length,
+                  ),
+                  style: IconButton.styleFrom(
+                    backgroundColor: palette.accentSoft,
+                    foregroundColor: palette.accent,
+                    side: BorderSide(
+                      color: palette.accent.withValues(alpha: 0.7),
+                    ),
+                    shape: const CircleBorder(),
+                    fixedSize: const Size(42, 42),
+                    padding: EdgeInsets.zero,
+                  ),
+                  icon: const Icon(Icons.chevron_left),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 8,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: IconButton.filledTonal(
+                  tooltip: 'Next image',
+                  onPressed: () => setState(
+                    () =>
+                        _imageIndex = (_imageIndex + 1) % widget.images.length,
+                  ),
+                  style: IconButton.styleFrom(
+                    backgroundColor: palette.accentSoft,
+                    foregroundColor: palette.accent,
+                    side: BorderSide(
+                      color: palette.accent.withValues(alpha: 0.7),
+                    ),
+                    shape: const CircleBorder(),
+                    fixedSize: const Size(42, 42),
+                    padding: EdgeInsets.zero,
+                  ),
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 14,
+              right: 16,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
+                  child: Text(
+                    '${_imageIndex + 1}/${widget.images.length}',
+                    style: const TextStyle(color: Colors.white, fontSize: 11),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          const IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0x00000000),
+                    Color(0x1A000000),
+                    Color(0xD9000000),
+                  ],
+                  stops: [0.25, 0.58, 1],
+                ),
               ),
             ),
           ),
@@ -499,7 +587,7 @@ class _ConverterHero extends StatelessWidget {
                     color: const Color(0x3310141C),
                   ),
                   child: Text(
-                    'ID  $converterCode',
+                    'ID  ${widget.converterCode}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -512,7 +600,7 @@ class _ConverterHero extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  title,
+                  widget.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -524,10 +612,10 @@ class _ConverterHero extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (brandName != null) ...[
+                if (widget.brandName != null) ...[
                   const SizedBox(height: 3),
                   Text(
-                    brandName!,
+                    widget.brandName!,
                     style: TextStyle(
                       color: palette.textPrimary.withValues(alpha: 0.9),
                       fontSize: 14,
@@ -540,53 +628,10 @@ class _ConverterHero extends StatelessWidget {
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DetailImages extends StatelessWidget {
-  const _DetailImages({required this.images});
-
-  final List<String> images;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = AppPalette.of(context);
-    return SizedBox(
-      height: 174,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: images.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final uri = _resolveImageUrl(images[index]);
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              width: 220,
-              decoration: BoxDecoration(
-                color: palette.surfaceSubtle,
-                border: Border.all(color: palette.border),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: uri == null
-                  ? Icon(Icons.broken_image_outlined, color: palette.textMuted)
-                  : Image.network(
-                      uri,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => Center(
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          color: palette.textMuted,
-                        ),
-                      ),
-                    ),
-            ),
-          );
-        },
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -649,7 +694,7 @@ class _DetailCard extends StatelessWidget {
                   Flexible(
                     child: Text(
                       rows[index].value,
-                      textAlign: TextAlign.right,
+                      textAlign: rows[index].valueAlignment,
                       style: TextStyle(
                         color: palette.textPrimary,
                         fontSize: 12,
@@ -667,22 +712,27 @@ class _DetailCard extends StatelessWidget {
 }
 
 class _DetailRow {
-  const _DetailRow(this.label, this.value);
+  const _DetailRow(
+    this.label,
+    this.value, {
+    this.valueAlignment = TextAlign.right,
+  });
 
   final String label;
   final String value;
+  final TextAlign valueAlignment;
 }
 
 class _MetalContentCard extends StatelessWidget {
   const _MetalContentCard({
     required this.label,
     required this.value,
-    required this.icon,
+    required this.symbol,
   });
 
   final String label;
   final double? value;
-  final IconData icon;
+  final String symbol;
 
   @override
   Widget build(BuildContext context) {
@@ -698,7 +748,7 @@ class _MetalContentCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: AppColors.accent, size: 16),
+          _ElementBadge(symbol: symbol, color: palette.accent),
           const SizedBox(height: 7),
           Text(
             label,
@@ -737,6 +787,66 @@ class _MetalContentCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ElementBadge extends StatelessWidget {
+  const _ElementBadge({required this.symbol, required this.color});
+
+  final String symbol;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 42,
+      child: CustomPaint(
+        painter: _ElementBadgePainter(color),
+        child: Center(
+          child: Text(
+            symbol,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ElementBadgePainter extends CustomPainter {
+  const _ElementBadgePainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.shortestSide / 2 - 3;
+    final outline = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    final node = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(center, radius, outline);
+    for (final position in [
+      Offset(center.dx, center.dy - radius),
+      Offset(center.dx + radius, center.dy),
+      Offset(center.dx, center.dy + radius),
+      Offset(center.dx - radius, center.dy),
+    ]) {
+      canvas.drawCircle(position, 2.1, node);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ElementBadgePainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _TextDetailCard extends StatelessWidget {

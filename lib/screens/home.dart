@@ -185,6 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           4 when widget.currentUser != null => AdminProfileScreen(
             user: widget.currentUser!,
+            brandService: widget.brandService,
             adminUserService: widget.adminUserService,
           ),
           4 => const AdminRestrictedScreen(),

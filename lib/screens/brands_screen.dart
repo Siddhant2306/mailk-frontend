@@ -52,18 +52,17 @@ class _BrandsScreenState extends State<BrandsScreen> {
         return;
       }
       setState(() {
-        _brands =
-            brands
-                .where((brand) => brand.logoUrl?.trim().isNotEmpty == true)
-                .toList()
-              ..sort((first, second) {
-                final countOrder = (second.converterCount ?? 0).compareTo(
-                  first.converterCount ?? 0,
-                );
-                return countOrder != 0
-                    ? countOrder
-                    : first.name.compareTo(second.name);
-              });
+        _brands = brands
+            .where((brand) => brand.logoUrl?.trim().isNotEmpty == true)
+            .toList()
+          ..sort((first, second) {
+            final countOrder = (second.converterCount ?? 0).compareTo(
+              first.converterCount ?? 0,
+            );
+            return countOrder != 0
+                ? countOrder
+                : first.name.compareTo(second.name);
+          });
         _isLoading = false;
       });
     } on DioException catch (error) {

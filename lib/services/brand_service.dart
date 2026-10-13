@@ -43,6 +43,11 @@ class BrandService {
   final AuthenticatedApiClient _apiClient;
   final BrandCache _cache;
 
+  static void invalidateConverterBrandsCache() {
+    _converterBrandsCache = null;
+    _converterBrandsCachedAt = null;
+  }
+
   /// Returns a fresh cached catalogue when possible. If refreshing fails, an
   /// older saved result is returned so users can still browse offline.
   Future<List<CarBrand>> getBrands({bool forceRefresh = false}) async {
@@ -91,6 +96,7 @@ class BrandService {
     }
 
     final brands = <CarBrand>[];
+    CarBrand? unknownBrand;
     for (final rawBrand in rawBrands) {
       if (rawBrand is! Map) {
         continue;
@@ -98,11 +104,21 @@ class BrandService {
       try {
         final brand = CarBrand.fromJson(Map<String, dynamic>.from(rawBrand));
         if (!requireLogo || brand.logoUrl != null) {
-          brands.add(brand);
+          if (brand.name.toLowerCase() == 'unknown') {
+            if (unknownBrand == null ||
+                (unknownBrand.id == null && brand.id != null)) {
+              unknownBrand = brand;
+            }
+          } else {
+            brands.add(brand);
+          }
         }
       } on FormatException {
         // Ignore a malformed record rather than hiding the entire catalogue.
       }
+    }
+    if (unknownBrand != null) {
+      brands.add(unknownBrand);
     }
     if (brands.isEmpty && requireLogo) {
       throw const FormatException('No valid brands were returned.');

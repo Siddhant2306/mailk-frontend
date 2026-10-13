@@ -4,6 +4,7 @@ import '../core/constants/constants.dart';
 import '../models/converter_record.dart';
 import '../models/converter_draft.dart';
 import 'authenticated_api_client.dart';
+import 'brand_service.dart';
 import 'converter_catalog_cache.dart';
 
 class ConverterService {
@@ -35,6 +36,7 @@ class ConverterService {
   }
 
   Future<int> createConverter(ConverterDraft draft) async {
+    _validateImageCount(draft);
     final response = await _apiClient.post(
       ApiConstants.converters,
       data: draft.toJson(),
@@ -44,20 +46,24 @@ class ConverterService {
       throw const FormatException('Invalid converter creation response.');
     }
     _catalogCache.invalidateAll();
+    BrandService.invalidateConverterBrandsCache();
     return data['converter_id'] as int;
   }
 
   Future<void> updateConverter(int converterId, ConverterDraft draft) async {
+    _validateImageCount(draft);
     await _apiClient.patch(
       ApiConstants.adminConverterDetail(converterId),
       data: draft.toJson(includeNulls: true),
     );
     _catalogCache.invalidateAll();
+    BrandService.invalidateConverterBrandsCache();
   }
 
   Future<void> deleteConverter(int converterId) async {
     await _apiClient.delete(ApiConstants.adminConverterDetail(converterId));
     _catalogCache.invalidateAll();
+    BrandService.invalidateConverterBrandsCache();
   }
 
   Future<ConverterCatalogPage> getConverters({
@@ -189,6 +195,9 @@ class ConverterService {
   }
 
   String messageFor(Object error) {
+    if (error is ConverterImageLimitException) {
+      return 'A converter can have at most 4 images.';
+    }
     if (error is FormatException) {
       return 'The image service returned an invalid response. Please retry.';
     }
@@ -207,4 +216,14 @@ class ConverterService {
     }
     return 'Could not upload the image or save the converter. Please try again.';
   }
+
+  void _validateImageCount(ConverterDraft draft) {
+    if (draft.images.length > 4) {
+      throw const ConverterImageLimitException();
+    }
+  }
+}
+
+class ConverterImageLimitException implements Exception {
+  const ConverterImageLimitException();
 }

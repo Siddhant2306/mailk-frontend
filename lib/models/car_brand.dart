@@ -18,7 +18,7 @@ class CarBrand {
     final slug = rawSlug == null || rawSlug.trim().isEmpty
         ? name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '-')
         : rawSlug.trim();
-    final rawId = json['id'];
+    final rawId = json['id'] ?? json['brand_id'];
     final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
     final rawConverterCount = json['converter_count'];
     final converterCount = rawConverterCount is int

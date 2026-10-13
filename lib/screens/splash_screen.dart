@@ -1,9 +1,21 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../firebase_options.dart';
 import 'login.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  const SplashScreen({
+    this.initializeFirebase,
+    this.hasAuthenticatedSession,
+    this.authenticatedBuilder,
+    super.key,
+  });
+
+  final Future<void> Function()? initializeFirebase;
+  final Future<bool> Function()? hasAuthenticatedSession;
+  final Widget Function()? authenticatedBuilder;
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -15,6 +27,9 @@ class _SplashScreenState extends State<SplashScreen>
 
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
+  bool _isInitializingFirebase = true;
+  bool _isResolvingSession = true;
+  String? _initializationError;
 
   @override
   void initState() {
@@ -35,6 +50,56 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     _animationController.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeFirebase();
+    });
+  }
+
+  Future<void> _initializeFirebase() async {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isInitializingFirebase = true;
+      _initializationError = null;
+    });
+    try {
+      final initialize =
+          widget.initializeFirebase ??
+          () => Firebase.initializeApp(
+            options: DefaultFirebaseOptions.currentPlatform,
+          );
+      await initialize();
+      final hasSession =
+          await (widget.hasAuthenticatedSession?.call() ??
+              FirebaseAuth.instance.authStateChanges().first.then(
+                (user) => user != null,
+              ));
+      if (hasSession && mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                widget.authenticatedBuilder?.call() ?? const LoginScreen(),
+          ),
+        );
+        return;
+      }
+      if (mounted) {
+        setState(() => _isResolvingSession = false);
+      }
+    } on Object catch (error) {
+      debugPrint('Firebase initialization failed: $error');
+      if (mounted) {
+        setState(() {
+          _initializationError = error.toString();
+          _isResolvingSession = false;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isInitializingFirebase = false);
+      }
+    }
   }
 
   @override
@@ -45,6 +110,17 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (_isResolvingSession) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF080706),
+        body: Center(
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Color(0xFFFFB21A),
+          ),
+        ),
+      );
+    }
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
@@ -168,48 +244,85 @@ class _SplashScreenState extends State<SplashScreen>
               ),
             ),
 
-            // GET STARTED
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: 45,
-              child: SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const LoginScreen(),
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFB21A),
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+            if (_isInitializingFirebase)
+              const Positioned(
+                left: 20,
+                right: 20,
+                bottom: 45,
+                child: SizedBox(
+                  height: 52,
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFFFFB21A),
                     ),
-                    elevation: 0,
                   ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Get Started',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
+                ),
+              )
+            else
+              Positioned(
+                left: 20,
+                right: 20,
+                bottom: 45,
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    key: const ValueKey('splash-get-started'),
+                    onPressed: _initializationError != null
+                        ? _initializeFirebase
+                        : () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const LoginScreen(),
+                              ),
+                            );
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFFB21A),
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
                       ),
-                      SizedBox(width: 10),
-                      Icon(Icons.arrow_forward, size: 20),
-                    ],
+                      elevation: 0,
+                    ),
+                    child: _initializationError != null
+                        ? const Text(
+                            'Retry secure startup',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Get Started',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(width: 10),
+                              Icon(Icons.arrow_forward, size: 20),
+                            ],
+                          ),
                   ),
                 ),
               ),
-            ),
+            if (_initializationError != null)
+              Positioned(
+                left: 20,
+                right: 20,
+                bottom: 105,
+                child: Text(
+                  'Secure startup failed. Check your connection and retry.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ),
 
             // FOOTER
             Positioned(

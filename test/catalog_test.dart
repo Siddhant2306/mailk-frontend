@@ -13,6 +13,7 @@ import 'package:malik/services/brand_service.dart';
 import 'package:malik/services/converter_catalog_cache.dart';
 import 'package:malik/services/converter_service.dart';
 import 'package:malik/services/authenticated_api_client.dart';
+import 'package:malik/widgets/profile/converter_form_sheet.dart';
 
 void main() {
   test('parses converter rows and page totals from the catalogue response', () {
@@ -147,6 +148,290 @@ void main() {
     expect(brands.single.name, 'Suzuki');
   });
 
+  test('unknown brand uses its backend ID and appears only once', () async {
+    final apiClient = _FakeAuthenticatedApiClient(
+      responseData: {
+        'data': [
+          {'brand_id': 87, 'name': 'Unknown'},
+          {'id': 99, 'name': 'unknown'},
+          {'id': 2, 'name': 'Suzuki'},
+        ],
+      },
+    );
+    final service = BrandService(apiClient: apiClient);
+
+    final brands = await service.getConverterBrands(forceRefresh: true);
+    final unknownBrands = brands.where(
+      (brand) => brand.name.toLowerCase() == 'unknown',
+    );
+
+    expect(unknownBrands, hasLength(1));
+    expect(unknownBrands.single.id, 87);
+  });
+
+  test('converter API receives selected brand ID as brand_id', () async {
+    final apiClient = _FakeAuthenticatedApiClient(
+      responseData: {'items': [], 'total': 0},
+    );
+    final service = ConverterService(
+      apiClient: apiClient,
+      catalogCache: ConverterCatalogCache(),
+    );
+
+    await service.getConverters(page: 1, brandId: 87, forceRefresh: true);
+
+    expect(apiClient.requestedQueryParameters.single['brand_id'], 87);
+  });
+
+  test('create and update reject more than four converter images', () async {
+    final apiClient = _FakeAuthenticatedApiClient(responseData: {});
+    final service = ConverterService(
+      apiClient: apiClient,
+      catalogCache: ConverterCatalogCache(),
+    );
+    final draft = ConverterDraft(
+      brandId: 8,
+      codeReference: 'ABC-42',
+      images: List.generate(5, (index) => 'https://example.com/$index.png'),
+    );
+
+    await expectLater(
+      service.createConverter(draft),
+      throwsA(isA<ConverterImageLimitException>()),
+    );
+    await expectLater(
+      service.updateConverter(42, draft),
+      throwsA(isA<ConverterImageLimitException>()),
+    );
+
+    expect(apiClient.requestedPaths, isEmpty);
+  });
+
+  testWidgets('admin can type to find and create a converter with Unknown', (
+    tester,
+  ) async {
+    final converterService = _FakeConverterService();
+
+    await tester.binding.setSurfaceSize(const Size(400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ConverterFormSheet(
+            converterService: converterService,
+            brandService: _FakeBrandService(
+              converterBrands: const [
+                CarBrand(id: 2, slug: 'suzuki', name: 'Suzuki', logoUrl: null),
+                CarBrand(
+                  id: 87,
+                  slug: 'unknown',
+                  name: 'Unknown',
+                  logoUrl: null,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextFormField).first, 'REF-UNKNOWN');
+    final brandField = find.byKey(const ValueKey('converter-brand-selector'));
+    await tester.ensureVisible(brandField);
+    await tester.tap(brandField);
+    await tester.enterText(brandField, 'Unk');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Unknown').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SAVE CONVERTER'));
+    await tester.pumpAndSettle();
+
+    expect(converterService.createdDraft?.brandId, 87);
+    expect(converterService.createdDraft?.codeReference, 'REF-UNKNOWN');
+  });
+
+  testWidgets('converter form smoothly animates when keyboard opens', (
+    tester,
+  ) async {
+    const screenSize = Size(400, 600);
+    final converterService = _FakeConverterService();
+    final brandService = _FakeBrandService();
+
+    await tester.binding.setSurfaceSize(screenSize);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    Widget buildForm({required EdgeInsets viewInsets}) {
+      return MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(size: screenSize, viewInsets: viewInsets),
+          child: Material(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: ConverterFormSheet(
+                converterService: converterService,
+                brandService: brandService,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildForm(viewInsets: EdgeInsets.zero));
+    await tester.pumpAndSettle();
+
+    final sheet = find.byKey(const ValueKey('converter-form-sheet'));
+    final initialHeight = tester.getSize(sheet).height;
+    await tester.pumpWidget(
+      buildForm(viewInsets: const EdgeInsets.only(bottom: 300)),
+    );
+    await tester.pump(const Duration(milliseconds: 125));
+
+    final intermediateHeight = tester.getSize(sheet).height;
+    expect(intermediateHeight, greaterThan(initialHeight));
+    expect(intermediateHeight, lessThan(582));
+
+    await tester.pumpAndSettle();
+    expect(tester.getSize(sheet).height, closeTo(582, 0.1));
+  });
+
+  testWidgets('converter form adds images one at a time from source cards', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ConverterFormSheet(
+            converterService: _FakeConverterService(),
+            brandService: _FakeBrandService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('0/4 selected'), findsOneWidget);
+    expect(find.text('Gallery'), findsOneWidget);
+    expect(find.text('Photo'), findsOneWidget);
+    expect(find.text('Add Image (+)'), findsNothing);
+  });
+
+  testWidgets('converter image section offers Gallery and Photo choices', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ConverterFormSheet(
+            converterService: _FakeConverterService(),
+            brandService: _FakeBrandService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Gallery'), findsOneWidget);
+    expect(find.text('Photo'), findsOneWidget);
+    expect(find.text('Pick from storage'), findsOneWidget);
+    expect(find.text('Take a photo'), findsOneWidget);
+  });
+
+  testWidgets('brand screen displays Unknown and its backend count', (
+    tester,
+  ) async {
+    CarBrand? selectedBrand;
+
+    await tester.binding.setSurfaceSize(const Size(400, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BrandsScreen(
+            brandService: _FakeBrandService(
+              converterBrands: const [
+                CarBrand(
+                  id: 87,
+                  slug: 'unknown',
+                  name: 'Unknown',
+                  logoUrl: 'https://example.com/unknown.png',
+                  converterCount: 7,
+                ),
+              ],
+            ),
+            onBrandSelected: (brand) => selectedBrand = brand,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unknown'), findsOneWidget);
+    expect(find.text('7 converters'), findsOneWidget);
+    await tester.tap(find.text('Unknown'));
+
+    expect(selectedBrand?.id, 87);
+  });
+
+  testWidgets('brand screen omits brands without a logo', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BrandsScreen(
+            brandService: _FakeBrandService(
+              converterBrands: const [
+                CarBrand(
+                  id: 88,
+                  slug: 'logo-less',
+                  name: 'Logo-less',
+                  logoUrl: null,
+                  converterCount: 9,
+                ),
+                CarBrand(
+                  id: 87,
+                  slug: 'unknown',
+                  name: 'Unknown',
+                  logoUrl: 'https://example.com/unknown.png',
+                  converterCount: 7,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Logo-less'), findsNothing);
+    expect(find.text('Unknown'), findsOneWidget);
+    expect(find.text('1 brands • 7 converters'), findsOneWidget);
+  });
+
+  testWidgets('converter detail markings are left aligned', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConverterDetailScreen(
+          converterId: 1,
+          converterService: _FakeConverterService(),
+          brandsById: const {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final marking = tester.widget<Text>(find.text('86J C04'));
+    expect(marking.textAlign, TextAlign.left);
+  });
+
   testWidgets('catalog requests more pages and keeps the backend total', (
     tester,
   ) async {
@@ -178,6 +463,30 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(service.requestedPages, [1, 2]);
+  });
+
+  testWidgets('catalog converter thumbnail uses enlarged size', (
+    tester,
+  ) async {
+    final service = _FakeConverterService();
+    await tester.binding.setSurfaceSize(const Size(400, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CatalogScreen(
+            converterService: service,
+            brandService: _FakeBrandService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('catalog-converter-image')).first).width,
+      128,
+    );
   });
 
   testWidgets('user-role catalog view loads without showing admin actions', (
@@ -257,10 +566,14 @@ void main() {
     await tester.pumpAndSettle();
 
     final heroImage = find.byWidgetPredicate(
-      (widget) => widget is Image && widget.fit == BoxFit.cover,
+      (widget) => widget is Image && widget.fit == BoxFit.contain,
     );
     expect(heroImage, findsOneWidget);
     expect(tester.getSize(heroImage).width, 400);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('converter-detail-image-hero'))).height,
+      360,
+    );
     expect(find.text('ID  AUTO-1'), findsOneWidget);
     expect(find.text('Swift'), findsNWidgets(2));
   });
@@ -268,13 +581,14 @@ void main() {
   testWidgets(
     'catalog cards show labeled fields and highlight search matches',
     (tester) async {
+      final service = _FakeConverterService();
       await tester.binding.setSurfaceSize(const Size(400, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: CatalogScreen(
-              converterService: _FakeConverterService(),
+              converterService: service,
               brandService: _FakeBrandService(),
             ),
           ),
@@ -283,7 +597,7 @@ void main() {
       await tester.pumpAndSettle();
 
       for (final label in [
-        'Code:',
+        'Reference:',
         'Make:',
         'Model:',
         'Marking:',
@@ -293,20 +607,33 @@ void main() {
         expect(find.text(label), findsWidgets);
       }
 
-      await tester.enterText(find.byType(TextField), '86J C04');
+      await tester.enterText(find.byType(TextField), 'CAT 1');
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
+      expect(service.queries.last.search, 'CAT 1');
 
-      final matchingText = find.byWidgetPredicate(
-        (widget) =>
-            widget is RichText &&
-            widget.text.toPlainText() == '86J C04' &&
-            (widget.text as TextSpan).children?.any(
-                  (span) => span.style?.backgroundColor != null,
-                ) ==
-                true,
+      final matchingCodes = tester.widgetList<RichText>(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is RichText && widget.text.toPlainText() == 'CAT-1',
+        ),
       );
-      expect(matchingText, findsWidgets);
+      int yellowHighlightCount(InlineSpan span) {
+        if (span is! TextSpan) return 0;
+        return (span.style?.backgroundColor == const Color(0xFFFFE082)
+                ? 1
+                : 0) +
+            (span.children?.fold<int>(
+                  0,
+                  (count, child) => count + yellowHighlightCount(child),
+                ) ??
+                0);
+      }
+
+      expect(
+        matchingCodes.any((text) => yellowHighlightCount(text.text) == 2),
+        isTrue,
+      );
     },
   );
 
@@ -431,13 +758,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('CAT-1'));
+    await tester.tap(find.text('CAT-1').first);
     await tester.pumpAndSettle();
 
     expect(service.requestedDetails, [1]);
     expect(find.text('Reference'), findsOneWidget);
     expect(find.text('CAT-1'), findsOneWidget);
     expect(find.text('PGM CONTENT'), findsOneWidget);
+    expect(find.text('Markings'), findsOneWidget);
+    expect(find.text('MARKINGS'), findsNothing);
+    expect(find.text('1/2'), findsOneWidget);
+    expect(find.text('Pt'), findsOneWidget);
+    expect(find.text('Pd'), findsOneWidget);
+    expect(find.text('Rh'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.chevron_right));
+    await tester.pumpAndSettle();
+    expect(find.text('2/2'), findsOneWidget);
   });
 
   testWidgets('search tab displays paginated catalog matches', (tester) async {
@@ -474,6 +810,7 @@ class _FakeConverterService implements ConverterService {
   final requestedPages = <int>[];
   final queries = <({int page, String? search, int? brandId})>[];
   final requestedDetails = <int>[];
+  ConverterDraft? createdDraft;
 
   @override
   Future<String> uploadConverterImage({
@@ -482,7 +819,10 @@ class _FakeConverterService implements ConverterService {
   }) async => '';
 
   @override
-  Future<int> createConverter(ConverterDraft draft) async => 0;
+  Future<int> createConverter(ConverterDraft draft) async {
+    createdDraft = draft;
+    return 0;
+  }
 
   @override
   Future<void> updateConverter(int converterId, ConverterDraft draft) async {}
@@ -544,7 +884,10 @@ class _FakeConverterService implements ConverterService {
       brandName: 'Suzuki',
       model: 'Swift',
       country: 'India',
-      images: const ['https://example.com/converter.png'],
+      images: const [
+        'https://example.com/converter.png',
+        'https://example.com/converter-back.png',
+      ],
       markings: const ['86J C04'],
       monolithWeightGrams: 750,
       ptPpm: 400,
@@ -556,15 +899,18 @@ class _FakeConverterService implements ConverterService {
 }
 
 class _FakeBrandService implements BrandService {
+  _FakeBrandService({this.converterBrands});
+
+  final List<CarBrand>? converterBrands;
+
   @override
   Future<List<CarBrand>> getBrands({bool forceRefresh = false}) async =>
       const [];
 
   @override
   Future<List<CarBrand>> getConverterBrands({bool forceRefresh = false}) async {
-    return const [
-      CarBrand(id: 2, slug: 'suzuki', name: 'Suzuki', logoUrl: null),
-    ];
+    return converterBrands ??
+        const [CarBrand(id: 2, slug: 'suzuki', name: 'Suzuki', logoUrl: null)];
   }
 }
 
@@ -575,6 +921,7 @@ class _FakeAuthenticatedApiClient implements AuthenticatedApiClient {
   final requestedPaths = <String>[];
   final requestedMethods = <String>[];
   final requestedData = <Object?>[];
+  final requestedQueryParameters = <Map<String, dynamic>>[];
 
   @override
   Future<Response<dynamic>> get(
@@ -582,6 +929,7 @@ class _FakeAuthenticatedApiClient implements AuthenticatedApiClient {
     Map<String, dynamic>? queryParameters,
   }) async {
     requestedPaths.add(path);
+    requestedQueryParameters.add(queryParameters ?? const {});
     return Response<dynamic>(
       requestOptions: RequestOptions(path: path),
       data: responseData,

@@ -8,44 +8,39 @@ class DashboardHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
-    return Row(
-      children: [
-        Image.asset(
-          'assets/Logo.png',
-          width: 58,
-          height: 58,
-          fit: BoxFit.contain,
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'MALIK ENTERPRISES',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: palette.textPrimary,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.1,
-                ),
-              ),
-              SizedBox(height: 3),
-              Text(
-                'Catalytic Converter Reference Catalog',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: palette.textMuted,
-                  fontSize: 12,
-                ),
-              ),
-            ],
+    return Center(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Image.asset(
+            'assets/Logo.png',
+            width: 58,
+            height: 58,
+            fit: BoxFit.contain,
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          Text(
+            'MALIK ENTERPRISES',
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: palette.textPrimary,
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            'Catalytic Converter Reference Catalog',
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: palette.textMuted, fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 }

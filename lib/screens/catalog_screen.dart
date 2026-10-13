@@ -423,10 +423,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
         builder: (_) => ConverterDetailScreen(
           converterId: converter.id,
           converterService: _converterService,
+          brandService: _brandService,
           brandsById: _brandsById,
           isAdmin: widget.isAdmin,
           onChanged: () {
             if (mounted) {
+              _loadBrands(forceRefresh: true);
               _loadFirstPage(forceRefresh: true);
             }
           },
@@ -436,7 +438,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
     if (!mounted || wasDeleted != true) {
       return;
     }
-    await _loadFirstPage(forceRefresh: true);
+    await Future.wait([
+      _loadBrands(forceRefresh: true),
+      _loadFirstPage(forceRefresh: true),
+    ]);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Converter deleted.')),
@@ -455,12 +460,18 @@ class _CatalogScreenState extends State<CatalogScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
-      builder: (_) => ConverterFormSheet(converterService: _converterService),
+      builder: (_) => ConverterFormSheet(
+        converterService: _converterService,
+        brandService: _brandService,
+      ),
     );
     if (!mounted || converterId == null) {
       return;
     }
-    await _loadFirstPage(forceRefresh: true);
+    await Future.wait([
+      _loadBrands(forceRefresh: true),
+      _loadFirstPage(forceRefresh: true),
+    ]);
     if (!mounted) {
       return;
     }
@@ -679,7 +690,7 @@ class _ConverterCard extends StatelessWidget {
           ),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final imageSize = constraints.maxWidth < 340 ? 84.0 : 108.0;
+              final imageSize = constraints.maxWidth < 340 ? 108.0 : 128.0;
               return Row(
                 children: [
                   _ConverterImage(
@@ -820,11 +831,23 @@ class _HighlightedText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final normalizedQuery = query.trim();
-    final palette = AppPalette.of(context);
-    final matchStart = normalizedQuery.isEmpty
-        ? -1
-        : value.toLowerCase().indexOf(normalizedQuery.toLowerCase());
-    if (matchStart < 0) {
+    final terms = normalizedQuery
+        .split(RegExp(r'\s+'))
+        .where((term) => term.isNotEmpty)
+        .toSet();
+    final lowerValue = value.toLowerCase();
+    final matches = <(int, int)>[];
+    for (final term in terms) {
+      final lowerTerm = term.toLowerCase();
+      var start = 0;
+      while (start < lowerValue.length) {
+        final index = lowerValue.indexOf(lowerTerm, start);
+        if (index < 0) break;
+        matches.add((index, index + lowerTerm.length));
+        start = index + lowerTerm.length;
+      }
+    }
+    if (matches.isEmpty) {
       return Text(
         value,
         maxLines: 1,
@@ -833,23 +856,41 @@ class _HighlightedText extends StatelessWidget {
       );
     }
 
-    final matchEnd = matchStart + normalizedQuery.length;
-    return Text.rich(
-      TextSpan(
-        style: style,
-        children: [
-          if (matchStart > 0) TextSpan(text: value.substring(0, matchStart)),
-          TextSpan(
-            text: value.substring(matchStart, matchEnd),
-            style: style.copyWith(
-              backgroundColor: palette.accentSoft,
-              color: palette.textPrimary,
-              fontWeight: FontWeight.w800,
-            ),
+    matches.sort((left, right) => left.$1.compareTo(right.$1));
+    final mergedMatches = <(int, int)>[];
+    for (final match in matches) {
+      if (mergedMatches.isNotEmpty && match.$1 <= mergedMatches.last.$2) {
+        final previous = mergedMatches.removeLast();
+        mergedMatches.add((previous.$1, previous.$2 > match.$2
+            ? previous.$2
+            : match.$2));
+      } else {
+        mergedMatches.add(match);
+      }
+    }
+    final spans = <TextSpan>[];
+    var cursor = 0;
+    for (final match in mergedMatches) {
+      if (match.$1 > cursor) {
+        spans.add(TextSpan(text: value.substring(cursor, match.$1)));
+      }
+      spans.add(
+        TextSpan(
+          text: value.substring(match.$1, match.$2),
+          style: style.copyWith(
+            backgroundColor: const Color(0xFFFFE082),
+            color: const Color(0xFF29251A),
+            fontWeight: FontWeight.w800,
           ),
-          if (matchEnd < value.length) TextSpan(text: value.substring(matchEnd)),
-        ],
-      ),
+        ),
+      );
+      cursor = match.$2;
+    }
+    if (cursor < value.length) {
+      spans.add(TextSpan(text: value.substring(cursor)));
+    }
+    return Text.rich(
+      TextSpan(style: style, children: spans),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     );
@@ -869,6 +910,7 @@ class _ConverterImage extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: Container(
+        key: const ValueKey('catalog-converter-image'),
         width: size,
         height: size,
         decoration: BoxDecoration(

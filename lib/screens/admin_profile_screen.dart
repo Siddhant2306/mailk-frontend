@@ -6,6 +6,7 @@ import '../core/theme/app_palette.dart';
 import '../models/app_user.dart';
 import '../models/pending_user.dart';
 import '../services/admin_user_service.dart';
+import '../services/brand_service.dart';
 import '../services/converter_service.dart';
 import '../widgets/profile/admin_profile_sections.dart';
 import '../widgets/profile/bulk_import_sheet.dart';
@@ -19,11 +20,13 @@ class AdminProfileScreen extends StatefulWidget {
     required this.user,
     super.key,
     this.converterService,
+    this.brandService,
     this.adminUserService,
   });
 
   final AppUser user;
   final ConverterService? converterService;
+  final BrandService? brandService;
   final AdminUserService? adminUserService;
 
   @override
@@ -58,7 +61,10 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
-      builder: (_) => ConverterFormSheet(converterService: _converterService),
+      builder: (_) => ConverterFormSheet(
+        converterService: _converterService,
+        brandService: widget.brandService,
+      ),
     );
     if (converterId != null && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

@@ -30,7 +30,6 @@ class MetalPriceGrid extends StatelessWidget {
   final bool hasLoadedOnce;
   final VoidCallback? onRetry;
 
-
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -92,52 +91,57 @@ class MetalPriceCard extends StatelessWidget {
     final change = quote?.changePercentage;
     final hasChange = change != null && change.isFinite;
 
-  return Semantics(
-    button: true,
-    selected: isSelected,
-    label: '${metal.displayName} price card',
-    child: Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: palette.surfaceElevated,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: palette.border),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _MetalHeading(metal: metal),
-                const SizedBox(height: 2),
-                Text(
-                  metal.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: palette.textMuted, fontSize: 8),
-                ),
-                const Spacer(),
-                _PriceText(quote: quote, unit: unit, isLoading: isLoading),
-                const SizedBox(height: 3),
-                if (hasChange)
-                  _PriceChange(change: change)
-                else
-                  _CardStatus(
-                    isLoading: isLoading,
-                    hasLoadedOnce: hasLoadedOnce,
-                    onRetry: onRetry,
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: '${metal.displayName} price card',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? const Color(0x1A55BDEB)
+                  : palette.surfaceElevated,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isSelected ? const Color(0xFF78D1F7) : palette.border,
+                width: isSelected ? 1.5 : 1,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _MetalHeading(metal: metal),
+                  const SizedBox(height: 2),
+                  Text(
+                    metal.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: palette.textMuted, fontSize: 8),
                   ),
-              ],
+                  const Spacer(),
+                  _PriceText(quote: quote, unit: unit, isLoading: isLoading),
+                  const SizedBox(height: 3),
+                  if (hasChange)
+                    _PriceChange(change: change)
+                  else
+                    _CardStatus(
+                      isLoading: isLoading,
+                      hasLoadedOnce: hasLoadedOnce,
+                      onRetry: onRetry,
+                    ),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
   }
 }
 

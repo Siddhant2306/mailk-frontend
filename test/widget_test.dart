@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:malik/screens/home.dart';
+import 'package:malik/screens/splash_screen.dart';
 import 'package:malik/core/theme/app_theme_controller.dart';
 import 'package:malik/core/theme/app_palette.dart';
 import 'package:malik/widgets/profile/admin_profile_sections.dart';
@@ -20,6 +23,63 @@ import 'package:malik/services/metal_service.dart';
 import 'package:malik/services/market_cache.dart';
 
 void main() {
+  testWidgets('splash renders before Firebase initialization completes', (
+    tester,
+  ) async {
+    final firebaseInitialization = Completer<void>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SplashScreen(
+          initializeFirebase: () => firebaseInitialization.future,
+          hasAuthenticatedSession: () async => false,
+        ),
+      ),
+    );
+
+    expect(find.text('MALIK'), findsNothing);
+    expect(find.byKey(const ValueKey('splash-get-started')), findsNothing);
+
+    firebaseInitialization.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('MALIK'), findsOneWidget);
+    expect(
+      tester
+          .widget<ElevatedButton>(
+            find.byKey(const ValueKey('splash-get-started')),
+          )
+          .onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('restored signed-in session skips Get Started screen', (
+    tester,
+  ) async {
+    final authRestoration = Completer<bool>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SplashScreen(
+          initializeFirebase: () async {},
+          hasAuthenticatedSession: () => authRestoration.future,
+          authenticatedBuilder: () => const Scaffold(
+            body: Center(child: Text('Restored session')),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('MALIK'), findsNothing);
+    expect(find.byKey(const ValueKey('splash-get-started')), findsNothing);
+
+    authRestoration.complete(true);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Restored session'), findsOneWidget);
+    expect(find.byKey(const ValueKey('splash-get-started')), findsNothing);
+  });
+
   test('converts ounce prices to kilograms', () {
     final price = MetalPrice(timestamp: 1704067200, price: 31.1034768);
 
@@ -234,7 +294,7 @@ void main() {
     expect(find.byTooltip('Switch to dark mode'), findsOneWidget);
   });
 
-  testWidgets('home market cards use the coordinated light palette', (
+  testWidgets('selected home market card uses the sky-blue highlight', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -261,11 +321,11 @@ void main() {
     final card = tester.widget<DecoratedBox>(find.byType(DecoratedBox).first);
     expect(
       (card.decoration as BoxDecoration).color,
-      AppPalette.light.surfaceElevated,
+      const Color(0x1A55BDEB),
     );
     expect(
       ((card.decoration as BoxDecoration).border! as Border).top.color,
-      AppPalette.light.border,
+      const Color(0xFF78D1F7),
     );
     expect(
       AppPalette.of(tester.element(find.byType(MetalPriceCard))).textPrimary,
