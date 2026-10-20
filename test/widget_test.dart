@@ -19,6 +19,7 @@ import 'package:malik/models/pending_user.dart';
 import 'package:malik/services/admin_user_service.dart';
 import 'package:malik/services/brand_service.dart';
 import 'package:malik/services/converter_service.dart';
+import 'package:malik/services/persistent_converter_catalog_cache.dart';
 import 'package:malik/services/metal_service.dart';
 import 'package:malik/services/market_cache.dart';
 
@@ -55,29 +56,40 @@ void main() {
   testWidgets('restored signed-in session skips Get Started screen', (
     tester,
   ) async {
-    final authRestoration = Completer<bool>();
     await tester.pumpWidget(
       MaterialApp(
         home: SplashScreen(
           initializeFirebase: () async {},
-          hasAuthenticatedSession: () => authRestoration.future,
-          authenticatedBuilder: () => const Scaffold(
-            body: Center(child: Text('Restored session')),
-          ),
+          hasAuthenticatedSession: () async => true,
+          authenticatedBuilder: () =>
+              const Scaffold(body: Center(child: Text('Restored session'))),
         ),
       ),
     );
-
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(find.text('MALIK'), findsNothing);
-    expect(find.byKey(const ValueKey('splash-get-started')), findsNothing);
-
-    authRestoration.complete(true);
     await tester.pumpAndSettle();
 
     expect(find.text('Restored session'), findsOneWidget);
     expect(find.byKey(const ValueKey('splash-get-started')), findsNothing);
+  });
+
+  testWidgets('splash exposes retry when Firebase initialization times out', (
+    tester,
+  ) async {
+    final firebaseInitialization = Completer<void>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SplashScreen(
+          initializeFirebase: () => firebaseInitialization.future,
+          hasAuthenticatedSession: () async => false,
+        ),
+      ),
+    );
+
+    await tester.pump(const Duration(seconds: 21));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('splash-get-started')), findsOneWidget);
+    expect(find.text('Retry secure startup'), findsOneWidget);
   });
 
   test('converts ounce prices to kilograms', () {
@@ -242,7 +254,7 @@ void main() {
     await tester.tap(find.text(r'$ / oz'));
     await tester.pump();
 
-    expect(find.text(r'Platinum trend • $ / oz'), findsOneWidget);
+    expect(find.text(r'Platinum • $ / oz'), findsOneWidget);
 
     await tester.tap(find.text('Browse brands'));
     await tester.pump();
@@ -261,6 +273,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Search'), findsOneWidget);
+    expect(find.text('CAT-1'), findsNothing);
+    await tester.enterText(find.byType(TextField), 'CAT 1');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
     expect(find.text('CAT-1'), findsOneWidget);
   });
 
@@ -308,6 +324,7 @@ void main() {
               usdQuote: null,
               displayedUnit: PriceUnit.inr,
               isLoading: false,
+              isStale: false,
               hasLoadedOnce: true,
               onRetry: null,
               isSelected: true,
@@ -319,10 +336,7 @@ void main() {
     );
 
     final card = tester.widget<DecoratedBox>(find.byType(DecoratedBox).first);
-    expect(
-      (card.decoration as BoxDecoration).color,
-      const Color(0x1A55BDEB),
-    );
+    expect((card.decoration as BoxDecoration).color, const Color(0x1A55BDEB));
     expect(
       ((card.decoration as BoxDecoration).border! as Border).top.color,
       const Color(0xFF78D1F7),
@@ -469,6 +483,17 @@ void sEtState(Null Function() param0) {}
 
 class _FakeMetalService extends MetalService {
   @override
+  Future<CachedMarketValue<Map<MetalType, MetalLivePrice?>>?>
+  readCachedLiveQuotes(PriceUnit unit) async => null;
+
+  @override
+  Future<CachedMarketValue<List<MetalPrice>>?> readCachedHistoryForMetal({
+    required MetalType metal,
+    required int days,
+    required PriceUnit unit,
+  }) async => null;
+
+  @override
   Future<Map<MetalType, MetalLivePrice?>> getLiveQuotes({
     required PriceUnit unit,
     bool forceRefresh = false,
@@ -519,6 +544,9 @@ class _FakeMetalService extends MetalService {
 
 class _FakeBrandService implements BrandService {
   @override
+  Future<List<CarBrand>?> getCachedConverterBrands() async => null;
+
+  @override
   Future<List<CarBrand>> getBrands({bool forceRefresh = false}) async {
     return const [
       CarBrand(slug: 'no-logo', name: 'No Logo', logoUrl: null),
@@ -553,9 +581,17 @@ class _FakeBrandService implements BrandService {
 
 class _FakeConverterService implements ConverterService {
   @override
-  Future<ConverterCatalogPage> getConverters({
-    required int page,
+  Future<CachedConverterCatalogPage?> getCachedFirstPage({
     int pageSize = 20,
+    String? search,
+    int? brandId,
+    Map<int, String> brandsById = const {},
+  }) async => null;
+
+  @override
+  Future<ConverterCatalogPage> getConverters({
+    int pageSize = 20,
+    String? cursor,
     String? search,
     int? brandId,
     Map<int, String> brandsById = const {},
@@ -563,8 +599,7 @@ class _FakeConverterService implements ConverterService {
   }) async {
     return ConverterCatalogPage(
       converters: const [ConverterRecord(id: 1, codeReference: 'CAT-1')],
-      total: 1,
-      page: page,
+      hasMore: false,
       pageSize: pageSize,
     );
   }

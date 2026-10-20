@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -56,13 +58,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
 
       debugPrint('Firebase user created.');
-      debugPrint('Firebase UID: ${firebaseUser.uid}');
-      debugPrint('Firebase Email: ${firebaseUser.email}');
 
       // ------------------------------------------------------------
       // 2. Get Firebase ID token
       // ------------------------------------------------------------
-      final idToken = await firebaseUser.getIdToken();
+      final idToken = await firebaseUser.getIdToken().timeout(
+        ApiConfig.firebaseTokenTimeout,
+      );
 
       if (idToken == null) {
         throw StateError('Unable to retrieve Firebase ID token.');
@@ -74,7 +76,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
       // 3. Register the user in our PostgreSQL database
       //    through FastAPI
       // ------------------------------------------------------------
-      final dio = Dio(BaseOptions(baseUrl: ApiConfig.baseUrl));
+      final dio = Dio(
+        BaseOptions(
+          baseUrl: ApiConfig.baseUrl,
+          connectTimeout: ApiConfig.apiConnectTimeout,
+          receiveTimeout: ApiConfig.apiReceiveTimeout,
+          responseType: ResponseType.json,
+        ),
+      );
 
       final response = await dio.post(
         ApiConstants.register,
@@ -82,8 +91,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
       );
 
       debugPrint('Registration API status: ${response.statusCode}');
-
-      debugPrint('Registration API response: ${response.data}');
 
       // ------------------------------------------------------------
       // 4. Registration succeeded
@@ -130,10 +137,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
 
       _showMessage(message);
+    } on TimeoutException {
+      _showMessage(
+        'Authentication timed out. Check your connection and try again.',
+      );
     } on DioException catch (error) {
       debugPrint('Registration API failed: ${error.response?.statusCode}');
-
-      debugPrint('Registration API response: ${error.response?.data}');
 
       String message = 'Could not register your account.';
 

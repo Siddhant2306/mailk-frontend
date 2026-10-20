@@ -29,7 +29,7 @@ class _BrandsScreenState extends State<BrandsScreen> {
   void initState() {
     super.initState();
     _brandService = widget.brandService ?? BrandService();
-    _loadBrands();
+    _restoreBrandsThenRefresh();
   }
 
   @override
@@ -38,9 +38,30 @@ class _BrandsScreenState extends State<BrandsScreen> {
     super.dispose();
   }
 
-  Future<void> _loadBrands({bool forceRefresh = false}) async {
+  Future<void> _restoreBrandsThenRefresh() async {
+    final cachedBrands = await _brandService.getCachedConverterBrands();
+    if (!mounted) {
+      return;
+    }
+    if (cachedBrands == null) {
+      await _loadBrands();
+      return;
+    }
+
     setState(() {
-      _isLoading = true;
+      _brands = _displayBrands(cachedBrands);
+      _isLoading = false;
+      _errorMessage = null;
+    });
+    _loadBrands(keepExisting: true);
+  }
+
+  Future<void> _loadBrands({
+    bool forceRefresh = false,
+    bool keepExisting = false,
+  }) async {
+    setState(() {
+      _isLoading = !keepExisting;
       _errorMessage = null;
     });
 
@@ -52,17 +73,7 @@ class _BrandsScreenState extends State<BrandsScreen> {
         return;
       }
       setState(() {
-        _brands = brands
-            .where((brand) => brand.logoUrl?.trim().isNotEmpty == true)
-            .toList()
-          ..sort((first, second) {
-            final countOrder = (second.converterCount ?? 0).compareTo(
-              first.converterCount ?? 0,
-            );
-            return countOrder != 0
-                ? countOrder
-                : first.name.compareTo(second.name);
-          });
+        _brands = _displayBrands(brands);
         _isLoading = false;
       });
     } on DioException catch (error) {
@@ -83,6 +94,18 @@ class _BrandsScreenState extends State<BrandsScreen> {
     } catch (_) {
       _setLoadError('Unable to load brands. Please try again.');
     }
+  }
+
+  List<CarBrand> _displayBrands(Iterable<CarBrand> brands) {
+    return brands
+        .where((brand) => brand.logoUrl?.trim().isNotEmpty == true)
+        .toList()
+      ..sort((first, second) {
+        final countOrder = (second.converterCount ?? 0).compareTo(
+          first.converterCount ?? 0,
+        );
+        return countOrder != 0 ? countOrder : first.name.compareTo(second.name);
+      });
   }
 
   void _setLoadError(String message) {
@@ -258,11 +281,7 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.cloud_off_outlined,
-              color: palette.textMuted,
-              size: 34,
-            ),
+            Icon(Icons.cloud_off_outlined, color: palette.textMuted, size: 34),
             const SizedBox(height: 10),
             Text(
               message,

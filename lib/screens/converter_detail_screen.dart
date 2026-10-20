@@ -375,14 +375,19 @@ class _ConverterDetails extends StatelessWidget {
                   Expanded(
                     child: _MetalContentCard(
                       label: 'PLATINUM',
+                      lableColor: const Color.fromARGB(255, 255, 183, 0),
+                      lableFontSize: 15,
                       value: converter.ptPpm,
                       symbol: 'Pt',
+
                     ),
                   ),
                   const SizedBox(width: 9),
                   Expanded(
                     child: _MetalContentCard(
                       label: 'PALLADIUM',
+                      lableColor: const Color.fromARGB(255, 255, 183, 0),
+                      lableFontSize: 15,
                       value: converter.pdPpm,
                       symbol: 'Pd',
                     ),
@@ -391,6 +396,8 @@ class _ConverterDetails extends StatelessWidget {
                   Expanded(
                     child: _MetalContentCard(
                       label: 'RHODIUM',
+                      lableColor: const Color.fromARGB(255, 255, 183, 0),
+                      lableFontSize: 15,
                       value: converter.rhPpm,
                       symbol: 'Rh',
                     ),
@@ -728,11 +735,16 @@ class _MetalContentCard extends StatelessWidget {
     required this.label,
     required this.value,
     required this.symbol,
+    this.lableColor,
+    this.lableFontSize,
+
   });
 
   final String label;
   final double? value;
   final String symbol;
+  final Color? lableColor;
+  final double? lableFontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -748,17 +760,18 @@ class _MetalContentCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _ElementBadge(symbol: symbol, color: palette.accent),
+          //_ElementBadge(symbol: symbol, color: palette.accent),
           const SizedBox(height: 7),
           Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: palette.textMuted,
-              fontSize: 7,
+              color: lableColor ?? palette.textMuted,
+              fontSize: lableFontSize ?? 7,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.45,
+              fontFamily: 'assets/fonts/LiberationSans-Regular.ttf',
             ),
           ),
           const SizedBox(height: 5),
@@ -770,13 +783,14 @@ class _MetalContentCard extends StatelessWidget {
                   style: TextStyle(
                     color: palette.textPrimary,
                     fontSize: 15,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w400,
+                    fontFamily: 'assets/fonts/LiberationSans-Regular.ttf',
                   ),
                 ),
                 if (value != null)
                   TextSpan(
                     text: '  ppm',
-                    style: TextStyle(color: palette.textMuted, fontSize: 8),
+                    style: TextStyle(color: palette.textMuted, fontSize: 8, fontFamily: 'assets/fonts/LiberationSans-Regular.ttf'),
                   ),
               ],
             ),
@@ -788,67 +802,6 @@ class _MetalContentCard extends StatelessWidget {
     );
   }
 }
-
-class _ElementBadge extends StatelessWidget {
-  const _ElementBadge({required this.symbol, required this.color});
-
-  final String symbol;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: 42,
-      child: CustomPaint(
-        painter: _ElementBadgePainter(color),
-        child: Center(
-          child: Text(
-            symbol,
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ElementBadgePainter extends CustomPainter {
-  const _ElementBadgePainter(this.color);
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.shortestSide / 2 - 3;
-    final outline = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-    final node = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    canvas.drawCircle(center, radius, outline);
-    for (final position in [
-      Offset(center.dx, center.dy - radius),
-      Offset(center.dx + radius, center.dy),
-      Offset(center.dx, center.dy + radius),
-      Offset(center.dx - radius, center.dy),
-    ]) {
-      canvas.drawCircle(position, 2.1, node);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ElementBadgePainter oldDelegate) =>
-      oldDelegate.color != color;
-}
-
 class _TextDetailCard extends StatelessWidget {
   const _TextDetailCard({required this.text});
 
@@ -871,6 +824,7 @@ class _TextDetailCard extends StatelessWidget {
           color: palette.textSecondary,
           fontSize: 12,
           height: 1.5,
+          fontFamily: 'assets/fonts/LiberationSans-Regular.ttf',
         ),
       ),
     );

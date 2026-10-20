@@ -47,10 +47,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
   List<ConverterRecord> _converters = [];
   List<CarBrand> _brands = [];
   int? _selectedBrandId;
-  int _total = 0;
-  int _page = 0;
+  String? _nextCursor;
   int _requestGeneration = 0;
   bool _isLoadingInitial = true;
+  bool _isRefreshingFirstPage = false;
   bool _isLoadingMore = false;
   bool _hasMore = true;
   bool _brandLoadFailed = false;
@@ -70,7 +70,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
     _selectedBrandId = widget.initialBrandId;
     _scrollController.addListener(_onScroll);
     _loadBrands();
-    _loadFirstPage();
+    if (!widget.searchMode) {
+      _restoreFirstPageFromCache();
+    }
   }
 
   @override
@@ -108,13 +110,32 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   void _onSearchChanged(String value) {
     _searchDebounce?.cancel();
+    _searchDebounce = null;
     _requestGeneration++;
+
+    final searchTerm = value.trim();
+    final isValidSearchTerm =
+        searchTerm.isEmpty ||
+        (searchTerm.length >= 3 && searchTerm.length <= 100);
+    setState(() {
+      _converters = [];
+      _nextCursor = null;
+      _hasMore = false;
+      _isLoadingInitial = false;
+      _isLoadingMore = false;
+      _paginationFailed = false;
+      _initialError = null;
+    });
+
+    if (!isValidSearchTerm || (widget.searchMode && searchTerm.isEmpty)) {
+      return;
+    }
     _searchDebounce = Timer(const Duration(milliseconds: 350), () {
       if (!mounted) {
         return;
       }
       _searchDebounce = null;
-      _loadFirstPage();
+      _restoreFirstPageFromCache();
     });
   }
 
@@ -126,19 +147,99 @@ class _CatalogScreenState extends State<CatalogScreen> {
     if (_scrollController.hasClients) {
       _scrollController.jumpTo(0);
     }
-    _loadFirstPage();
+    _restoreFirstPageFromCache();
   }
 
-  Future<void> _loadFirstPage({bool forceRefresh = false}) async {
+  /// Shows a saved first page before attempting a revalidation. This prevents
+  /// an idle backend from turning a catalogue visit into a blank loading view.
+  Future<void> _restoreFirstPageFromCache() async {
     _searchDebounce?.cancel();
     _searchDebounce = null;
+    if (!_canRequestCurrentSearch) {
+      _clearFirstPageState();
+      return;
+    }
+
     final requestGeneration = ++_requestGeneration;
     setState(() {
       _converters = [];
-      _total = 0;
-      _page = 0;
-      _hasMore = true;
+      _nextCursor = null;
+      _hasMore = false;
       _isLoadingInitial = true;
+      _isRefreshingFirstPage = false;
+      _isLoadingMore = false;
+      _paginationFailed = false;
+      _initialError = null;
+    });
+
+    try {
+      final cached = await _converterService.getCachedFirstPage(
+        pageSize: _pageSize,
+        search: _searchController.text,
+        brandId: _selectedBrandId,
+        brandsById: _brandsById,
+      );
+      if (!mounted || requestGeneration != _requestGeneration) {
+        return;
+      }
+      if (cached == null) {
+        await _loadFirstPage();
+        return;
+      }
+
+      final page = cached.page;
+      setState(() {
+        _converters = _uniqueConverters(page.converters);
+        _hasMore =
+            page.hasMore &&
+            page.converters.isNotEmpty &&
+            page.nextCursor != null;
+        _nextCursor = page.nextCursor;
+        _isLoadingInitial = false;
+      });
+      if (!cached.isFresh) {
+        unawaited(_loadFirstPage(forceRefresh: true, keepExisting: true));
+      }
+    } on Object {
+      if (!mounted || requestGeneration != _requestGeneration) {
+        return;
+      }
+      await _loadFirstPage();
+    }
+  }
+
+  void _clearFirstPageState() {
+    setState(() {
+      _converters = [];
+      _nextCursor = null;
+      _hasMore = false;
+      _isLoadingInitial = false;
+      _isRefreshingFirstPage = false;
+      _isLoadingMore = false;
+      _paginationFailed = false;
+      _initialError = null;
+    });
+  }
+
+  Future<void> _loadFirstPage({
+    bool forceRefresh = false,
+    bool keepExisting = false,
+  }) async {
+    _searchDebounce?.cancel();
+    _searchDebounce = null;
+    if (!_canRequestCurrentSearch) {
+      _clearFirstPageState();
+      return;
+    }
+    final requestGeneration = ++_requestGeneration;
+    setState(() {
+      if (!keepExisting) {
+        _converters = [];
+        _nextCursor = null;
+        _hasMore = false;
+      }
+      _isLoadingInitial = !keepExisting;
+      _isRefreshingFirstPage = true;
       _isLoadingMore = false;
       _paginationFailed = false;
       _initialError = null;
@@ -146,7 +247,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
     try {
       final result = await _converterService.getConverters(
-        page: 1,
         pageSize: _pageSize,
         search: _searchController.text,
         brandId: _selectedBrandId,
@@ -158,13 +258,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
       }
       setState(() {
         _converters = _uniqueConverters(result.converters);
-        _total = result.total;
-        _page = result.page;
         _hasMore =
             result.hasMore &&
             result.converters.isNotEmpty &&
-            _converters.length < _total;
+            result.nextCursor != null;
+        _nextCursor = result.nextCursor;
         _isLoadingInitial = false;
+        _isRefreshingFirstPage = false;
       });
     } on Object catch (error) {
       if (!mounted || requestGeneration != _requestGeneration) {
@@ -172,21 +272,26 @@ class _CatalogScreenState extends State<CatalogScreen> {
       }
       setState(() {
         _isLoadingInitial = false;
-        _initialError = _messageFor(error);
+        _isRefreshingFirstPage = false;
+        _initialError = keepExisting && _converters.isNotEmpty
+            ? null
+            : _messageFor(error);
       });
     }
   }
 
   Future<void> _loadNextPage() async {
     if (_isLoadingInitial ||
+        _isRefreshingFirstPage ||
         _isLoadingMore ||
         !_hasMore ||
-        _initialError != null) {
+        _initialError != null ||
+        _nextCursor == null) {
       return;
     }
 
     final requestGeneration = _requestGeneration;
-    final nextPage = _page + 1;
+    final cursor = _nextCursor!;
     setState(() {
       _isLoadingMore = true;
       _paginationFailed = false;
@@ -194,8 +299,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
     try {
       final result = await _converterService.getConverters(
-        page: nextPage,
         pageSize: _pageSize,
+        cursor: cursor,
         search: _searchController.text,
         brandId: _selectedBrandId,
         brandsById: _brandsById,
@@ -205,12 +310,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
       }
       setState(() {
         _converters = _uniqueConverters([..._converters, ...result.converters]);
-        _total = result.total;
-        _page = result.page;
         _hasMore =
             result.hasMore &&
             result.converters.isNotEmpty &&
-            _converters.length < _total;
+            result.nextCursor != null;
+        _nextCursor = result.nextCursor;
         _isLoadingMore = false;
       });
     } on Object {
@@ -239,6 +343,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
   }
 
   String _messageFor(Object error) {
+    if (error is ArgumentError) {
+      return error.message?.toString() ?? 'Enter a valid search term.';
+    }
     if (error is AuthenticationRequiredException) {
       return 'Sign in to browse the converter catalogue.';
     }
@@ -255,9 +362,30 @@ class _CatalogScreenState extends State<CatalogScreen> {
     return 'Unable to load converters. Check your connection and retry.';
   }
 
+  bool get _canRequestCurrentSearch {
+    final searchTerm = _searchController.text.trim();
+    if (searchTerm.length > 100 ||
+        (searchTerm.isNotEmpty && searchTerm.length < 3)) {
+      return false;
+    }
+    return !widget.searchMode || searchTerm.isNotEmpty;
+  }
+
+  String get _resultCountLabel {
+    final suffix = _hasMore ? '+' : '';
+    return '${_converters.length}$suffix '
+        '${_converters.length == 1 ? 'converter' : 'converters'}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
+    final searchTerm = _searchController.text.trim();
+    final isSearchTermTooShort = searchTerm.isNotEmpty && searchTerm.length < 3;
+    final isSearchTermTooLong = searchTerm.length > 100;
+    final hasValidSearchTerm = !isSearchTermTooShort && !isSearchTermTooLong;
+    final showCatalogResults =
+        hasValidSearchTerm && (!widget.searchMode || searchTerm.isNotEmpty);
     final selectedBrand = _selectedBrandId == null
         ? null
         : _brandName(_selectedBrandId!);
@@ -299,38 +427,47 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 onRetry: _loadBrands,
               ),
             ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 9),
-            sliver: SliverToBoxAdapter(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _isLoadingInitial && _initialError == null
-                          ? 'Loading converters…'
-                          : '$_total ${_total == 1 ? 'converter' : 'converters'}',
-                      style: TextStyle(
-                        color: palette.textMuted,
-                        fontSize: 10,
+          if (showCatalogResults)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 9),
+              sliver: SliverToBoxAdapter(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _isLoadingInitial && _initialError == null
+                            ? 'Loading converters…'
+                            : _resultCountLabel,
+                        style: TextStyle(
+                          color: palette.textMuted,
+                          fontSize: 10,
+                        ),
                       ),
                     ),
-                  ),
-                  if (selectedBrand != null)
-                    Text(
-                      'Filter: $selectedBrand',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: palette.accent,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
+                    if (selectedBrand != null)
+                      Text(
+                        'Filter: $selectedBrand',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: palette.accent,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          if (_isLoadingInitial)
+          if (!showCatalogResults)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: _CatalogSearchPrompt(
+                isTooShort: isSearchTermTooShort,
+                isTooLong: isSearchTermTooLong,
+              ),
+            )
+          else if (_isLoadingInitial)
             const SliverPadding(
               padding: EdgeInsets.symmetric(horizontal: 12),
               sliver: SliverToBoxAdapter(child: _CatalogLoadingState()),
@@ -443,9 +580,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
       _loadFirstPage(forceRefresh: true),
     ]);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Converter deleted.')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Converter deleted.')));
     }
   }
 
@@ -661,10 +797,10 @@ class _ConverterCard extends StatelessWidget {
         ? '—'
         : converter.markings.join(', ');
     final code = converter.converterCode.isNotEmpty
-          ? converter.converterCode
-          : (converter.codeReference.isNotEmpty
-          ? converter.codeReference
-          : 'Converter ${converter.id}');
+        ? converter.converterCode
+        : (converter.codeReference.isNotEmpty
+              ? converter.codeReference
+              : 'Converter ${converter.id}');
     final weight = converter.monolithWeightGrams == null
         ? '—'
         : _formatWeight(converter.monolithWeightGrams!);
@@ -716,13 +852,6 @@ class _ConverterCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         _CatalogField(
-                          label: 'Reference:',
-                          value:  converter.codeReference.isNotEmpty ? converter.codeReference : '—',
-                          searchQuery: searchQuery,
-                          valueColor: palette.accent,
-                          emphasized: true,
-                        ),
-                        _CatalogField(
                           label: 'Make:',
                           value: brandName ?? '—',
                           searchQuery: searchQuery,
@@ -751,11 +880,7 @@ class _ConverterCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Icon(
-                    Icons.chevron_right,
-                    color: palette.textMuted,
-                    size: 22,
-                  ),
+                  Icon(Icons.chevron_right, color: palette.textMuted, size: 22),
                 ],
               );
             },
@@ -771,15 +896,15 @@ class _CatalogField extends StatelessWidget {
     required this.label,
     required this.value,
     required this.searchQuery,
-    this.valueColor,
-    this.emphasized = false,
+    //this.valueColor,
+    //this.emphasized = false,
   });
 
   final String label;
   final String value;
   final String searchQuery;
-  final Color? valueColor;
-  final bool emphasized;
+  //final Color? valueColor;
+  //final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
@@ -805,9 +930,9 @@ class _CatalogField extends StatelessWidget {
               value: value,
               query: searchQuery,
               style: TextStyle(
-                color: valueColor ?? palette.textPrimary,
+                //color: valueColor ?? palette.textPrimary,
                 fontSize: 12,
-                fontWeight: emphasized ? FontWeight.w700 : FontWeight.w400,
+                //fontWeight: emphasized ? FontWeight.w700 : FontWeight.w400,
               ),
             ),
           ),
@@ -861,9 +986,10 @@ class _HighlightedText extends StatelessWidget {
     for (final match in matches) {
       if (mergedMatches.isNotEmpty && match.$1 <= mergedMatches.last.$2) {
         final previous = mergedMatches.removeLast();
-        mergedMatches.add((previous.$1, previous.$2 > match.$2
-            ? previous.$2
-            : match.$2));
+        mergedMatches.add((
+          previous.$1,
+          previous.$2 > match.$2 ? previous.$2 : match.$2,
+        ));
       } else {
         mergedMatches.add(match);
       }
@@ -1002,11 +1128,7 @@ class _CatalogErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.cloud_off_outlined,
-              color: palette.textMuted,
-              size: 31,
-            ),
+            Icon(Icons.cloud_off_outlined, color: palette.textMuted, size: 31),
             const SizedBox(height: 9),
             Text(
               message,
@@ -1033,6 +1155,36 @@ class _CatalogEmptyState extends StatelessWidget {
         padding: EdgeInsets.all(24),
         child: Text(
           'No converters found.',
+          style: TextStyle(color: palette.textMuted, fontSize: 12),
+        ),
+      ),
+    );
+  }
+}
+
+class _CatalogSearchPrompt extends StatelessWidget {
+  const _CatalogSearchPrompt({
+    required this.isTooShort,
+    required this.isTooLong,
+  });
+
+  final bool isTooShort;
+  final bool isTooLong;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final message = isTooLong
+        ? 'Search terms can be at most 100 characters.'
+        : isTooShort
+        ? 'Enter at least 3 characters to search.'
+        : 'Search by code, marking, make or model.';
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(
+          message,
+          textAlign: TextAlign.center,
           style: TextStyle(color: palette.textMuted, fontSize: 12),
         ),
       ),

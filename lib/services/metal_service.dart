@@ -28,6 +28,25 @@ class MetalService {
   final Dio _dio;
   final MarketCache _cache;
 
+  /// Restores a local quote snapshot without making a network request.
+  Future<CachedMarketValue<Map<MetalType, MetalLivePrice?>>?>
+  readCachedLiveQuotes(PriceUnit unit) {
+    return _cache.readCachedQuotes(unit);
+  }
+
+  /// Restores the locally saved series that is currently visible in the chart.
+  Future<CachedMarketValue<List<MetalPrice>>?> readCachedHistoryForMetal({
+    required MetalType metal,
+    required int days,
+    required PriceUnit unit,
+  }) {
+    return _cache.readCachedHistoryForMetal(
+      metal: metal,
+      days: days,
+      unit: unit,
+    );
+  }
+
   Future<MetalLivePrice> getLivePrice({
     required String symbol,
     String currency = 'INR',

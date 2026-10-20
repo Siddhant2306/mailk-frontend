@@ -19,12 +19,14 @@ class AdminProfileScreen extends StatefulWidget {
   const AdminProfileScreen({
     required this.user,
     super.key,
+    this.isSessionVerified = true,
     this.converterService,
     this.brandService,
     this.adminUserService,
   });
 
   final AppUser user;
+  final bool isSessionVerified;
   final ConverterService? converterService;
   final BrandService? brandService;
   final AdminUserService? adminUserService;
@@ -46,7 +48,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.user.isAdmin) {
+    if (widget.user.isAdmin && widget.isSessionVerified) {
       _refreshPendingUsers();
     } else {
       _isLoadingApprovals = false;
@@ -166,7 +168,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
             const ProfileHeading(),
             const SizedBox(height: 16),
             ProfileAccountCard(user: widget.user),
-            if (widget.user.isAdmin) ...[
+            if (widget.user.isAdmin && widget.isSessionVerified) ...[
               const SizedBox(height: 14),
               const AdminCapabilities(),
               const SizedBox(height: 16),

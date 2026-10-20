@@ -1,12 +1,28 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'core/navigation/app_routes.dart';
 import 'core/theme/app_theme_controller.dart';
 import 'core/theme/app_palette.dart';
+import 'screens/login.dart';
 import 'screens/splash_screen.dart';
 
 void main() {
+  final stopwatch = Stopwatch()..start();
+
+  void mark(String message) {
+    developer.log(
+      '${stopwatch.elapsedMilliseconds} ms | $message',
+      name: 'startup',
+    );
+  }
+
+  mark('main entered');
+
   WidgetsFlutterBinding.ensureInitialized();
+  mark('Flutter binding initialized');
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -19,7 +35,14 @@ void main() {
     ),
   );
 
+  mark('System UI configured');
+
   runApp(const MalikApp());
+  mark('runApp called');
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    mark('First Flutter frame rendered');
+  });
 }
 
 class MalikApp extends StatelessWidget {
@@ -31,6 +54,7 @@ class MalikApp extends StatelessWidget {
       animation: appThemeController,
       builder: (context, _) {
         final isDark = appThemeController.themeMode == ThemeMode.dark;
+
         final systemUiStyle = SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
@@ -63,7 +87,7 @@ class MalikApp extends StatelessWidget {
           darkTheme: ThemeData(
             brightness: Brightness.dark,
             colorScheme: ColorScheme.dark(
-              primary: Color(0xFFFFB21A),
+              primary: const Color(0xFFFFB21A),
               surface: AppPalette.dark.surface,
             ),
             scaffoldBackgroundColor: AppPalette.dark.background,
@@ -74,6 +98,7 @@ class MalikApp extends StatelessWidget {
             value: systemUiStyle,
             child: child ?? const SizedBox.shrink(),
           ),
+          routes: {AppRoutes.login: (_) => const LoginScreen()},
           home: const SplashScreen(),
         );
       },

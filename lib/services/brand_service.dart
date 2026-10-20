@@ -21,8 +21,8 @@ class BrandService {
         Dio(
           BaseOptions(
             baseUrl: ApiConfig.baseUrl,
-            connectTimeout: const Duration(seconds: 10),
-            receiveTimeout: const Duration(seconds: 25),
+            connectTimeout: ApiConfig.apiConnectTimeout,
+            receiveTimeout: ApiConfig.apiReceiveTimeout,
             responseType: ResponseType.json,
           ),
         );
@@ -46,6 +46,16 @@ class BrandService {
   static void invalidateConverterBrandsCache() {
     _converterBrandsCache = null;
     _converterBrandsCachedAt = null;
+  }
+
+  /// Returns a saved brand catalogue immediately, including a stale snapshot.
+  /// Call [getConverterBrands] afterwards to revalidate it when required.
+  Future<List<CarBrand>?> getCachedConverterBrands() async {
+    final cachedBrands = _converterBrandsCache;
+    if (cachedBrands != null) {
+      return cachedBrands;
+    }
+    return _cache.readConverterBrands(allowExpired: true);
   }
 
   /// Returns a fresh cached catalogue when possible. If refreshing fails, an
@@ -82,11 +92,31 @@ class BrandService {
       return cachedBrands;
     }
 
-    final response = await _apiClient.get(ApiConstants.brands);
-    final brands = _parseBrands(response.data, requireLogo: false);
-    _converterBrandsCache = brands;
-    _converterBrandsCachedAt = DateTime.now();
-    return brands;
+    if (!forceRefresh) {
+      final persistedBrands = await _cache.readConverterBrands();
+      if (persistedBrands != null) {
+        _converterBrandsCache = persistedBrands;
+        _converterBrandsCachedAt = DateTime.now();
+        return persistedBrands;
+      }
+    }
+
+    try {
+      final response = await _apiClient.get(ApiConstants.brands);
+      final brands = _parseBrands(response.data, requireLogo: false);
+      _converterBrandsCache = brands;
+      _converterBrandsCachedAt = DateTime.now();
+      await _cache.writeConverterBrands(brands);
+      return brands;
+    } on Object {
+      final staleBrands = await _cache.readConverterBrands(allowExpired: true);
+      if (staleBrands != null) {
+        _converterBrandsCache = staleBrands;
+        _converterBrandsCachedAt = DateTime.now();
+        return staleBrands;
+      }
+      rethrow;
+    }
   }
 
   List<CarBrand> _parseBrands(dynamic responseData, {bool requireLogo = true}) {

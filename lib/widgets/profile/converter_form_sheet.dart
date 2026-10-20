@@ -833,7 +833,7 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
             for (final type in const [
               'Ceramic + DPF',
               'Metallic + DPF',
-              'Ceriamic',
+              'Ceramic',
               'Metallic',
               'DPF',
             ])

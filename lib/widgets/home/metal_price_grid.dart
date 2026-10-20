@@ -15,6 +15,7 @@ class MetalPriceGrid extends StatelessWidget {
     required this.snapshot,
     required this.selectedUnit,
     required this.isLoading,
+    required this.isStale,
     required this.hasLoadedOnce,
     required this.onRetry,
     required this.onMetalChanged,
@@ -27,6 +28,7 @@ class MetalPriceGrid extends StatelessWidget {
   final MetalType selectedMetal;
   final ValueChanged<MetalType> onMetalChanged;
   final bool isLoading;
+  final bool isStale;
   final bool hasLoadedOnce;
   final VoidCallback? onRetry;
 
@@ -44,6 +46,7 @@ class MetalPriceGrid extends StatelessWidget {
                 usdQuote: snapshot.quoteFor(metal, PriceUnit.usd),
                 displayedUnit: selectedUnit,
                 isLoading: isLoading,
+                isStale: isStale,
                 hasLoadedOnce: hasLoadedOnce,
                 onRetry: onRetry,
                 isSelected: selectedMetal == metal,
@@ -65,6 +68,7 @@ class MetalPriceCard extends StatelessWidget {
     required this.usdQuote,
     required this.displayedUnit,
     required this.isLoading,
+    required this.isStale,
     required this.hasLoadedOnce,
     required this.onRetry,
     required this.isSelected,
@@ -77,6 +81,7 @@ class MetalPriceCard extends StatelessWidget {
   final MetalLivePrice? usdQuote;
   final PriceUnit displayedUnit;
   final bool isLoading;
+  final bool isStale;
   final bool hasLoadedOnce;
   final VoidCallback? onRetry;
   final bool isSelected;
@@ -127,7 +132,13 @@ class MetalPriceCard extends StatelessWidget {
                   const Spacer(),
                   _PriceText(quote: quote, unit: unit, isLoading: isLoading),
                   const SizedBox(height: 3),
-                  if (hasChange)
+                  if (isStale)
+                    _CardStatus(
+                      isLoading: true,
+                      hasLoadedOnce: hasLoadedOnce,
+                      onRetry: onRetry,
+                    )
+                  else if (hasChange)
                     _PriceChange(change: change)
                   else
                     _CardStatus(

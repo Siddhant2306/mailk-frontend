@@ -13,19 +13,33 @@ import '../models/metal_price.dart';
 class MarketCache {
   static const quoteTtl = Duration(minutes: 10);
   static const historyTtl = Duration(minutes: 30);
+  static const maxStaleAge = Duration(days: 7);
 
   Future<SharedPreferences>? _preferences;
 
   Future<Map<MetalType, MetalLivePrice?>?> readQuotes(PriceUnit unit) async {
-    final value = await _read(_quoteKey(unit), quoteTtl);
-    if (value == null) {
+    final cached = await readCachedQuotes(unit, allowStale: false);
+    return cached?.value;
+  }
+
+  /// Reads saved quotes for immediate display, including stale values.
+  Future<CachedMarketValue<Map<MetalType, MetalLivePrice?>>?> readCachedQuotes(
+    PriceUnit unit, {
+    bool allowStale = true,
+  }) async {
+    final cached = await _read(
+      _quoteKey(unit),
+      quoteTtl,
+      allowStale: allowStale,
+    );
+    if (cached == null) {
       return null;
     }
 
     try {
       final quotes = <MetalType, MetalLivePrice?>{};
       for (final metal in MetalType.values) {
-        final rawQuote = value[metal.name];
+        final rawQuote = cached.data[metal.name];
         quotes[metal] = rawQuote is Map
             ? MetalLivePrice.fromJson(
                 Map<String, dynamic>.from(rawQuote),
@@ -34,7 +48,11 @@ class MarketCache {
               )
             : null;
       }
-      return quotes;
+      return CachedMarketValue(
+        value: Map.unmodifiable(quotes),
+        cachedAt: cached.cachedAt,
+        isFresh: cached.isFresh,
+      );
     } on Object {
       await _remove(_quoteKey(unit));
       return null;
@@ -54,17 +72,36 @@ class MarketCache {
     required PriceUnit unit,
     required int days,
   }) async {
+    final cached = await readCachedHistory(
+      unit: unit,
+      days: days,
+      allowStale: false,
+    );
+    return cached?.value;
+  }
+
+  Future<CachedMarketValue<Map<MetalType, List<MetalPrice>>>?>
+  readCachedHistory({
+    required PriceUnit unit,
+    required int days,
+    bool allowStale = true,
+  }) async {
     final key = _historyKey(unit, days);
-    final value = await _read(key, historyTtl);
-    if (value == null) {
+    final cached = await _read(key, historyTtl, allowStale: allowStale);
+    if (cached == null) {
       return null;
     }
 
     try {
-      return {
+      final history = {
         for (final metal in MetalType.values)
-          metal: _pricesFrom(value[metal.name]),
+          metal: _pricesFrom(cached.data[metal.name]),
       };
+      return CachedMarketValue(
+        value: Map.unmodifiable(history),
+        cachedAt: cached.cachedAt,
+        isFresh: cached.isFresh,
+      );
     } on Object {
       await _remove(key);
       return null;
@@ -89,14 +126,37 @@ class MarketCache {
     required PriceUnit unit,
     required int days,
   }) async {
-    final value = await _read(_historyKey(unit, days), historyTtl);
-    final rawHistory = value?[metal.name];
+    final cached = await readCachedHistoryForMetal(
+      metal: metal,
+      unit: unit,
+      days: days,
+      allowStale: false,
+    );
+    return cached?.value;
+  }
+
+  Future<CachedMarketValue<List<MetalPrice>>?> readCachedHistoryForMetal({
+    required MetalType metal,
+    required PriceUnit unit,
+    required int days,
+    bool allowStale = true,
+  }) async {
+    final cached = await _read(
+      _historyKey(unit, days),
+      historyTtl,
+      allowStale: allowStale,
+    );
+    final rawHistory = cached?.data[metal.name];
     if (rawHistory == null) {
       return null;
     }
 
     try {
-      return _pricesFrom(rawHistory);
+      return CachedMarketValue(
+        value: List.unmodifiable(_pricesFrom(rawHistory)),
+        cachedAt: cached!.cachedAt,
+        isFresh: cached.isFresh,
+      );
     } on Object {
       return null;
     }
@@ -109,14 +169,20 @@ class MarketCache {
     required List<MetalPrice> history,
   }) async {
     final key = _historyKey(unit, days);
-    final existing = await _read(key, historyTtl) ?? <String, dynamic>{};
+    final existing =
+        (await _read(key, historyTtl, allowStale: true))?.data ??
+        <String, dynamic>{};
     await _write(key, {
       ...existing,
       metal.name: [for (final price in history) price.toJson()],
     });
   }
 
-  Future<Map<String, dynamic>?> _read(String key, Duration ttl) async {
+  Future<_MarketCacheEntry?> _read(
+    String key,
+    Duration ttl, {
+    required bool allowStale,
+  }) async {
     final preferences = await _store;
     final serialized = preferences.getString(key);
     if (serialized == null) {
@@ -131,11 +197,20 @@ class MarketCache {
         await preferences.remove(key);
         return null;
       }
-      if (DateTime.now().difference(storedAt) > ttl) {
+      final age = DateTime.now().difference(storedAt);
+      if (age > maxStaleAge) {
         await preferences.remove(key);
         return null;
       }
-      return Map<String, dynamic>.from(data);
+      final isFresh = age <= ttl;
+      if (!isFresh && !allowStale) {
+        return null;
+      }
+      return _MarketCacheEntry(
+        data: Map<String, dynamic>.from(data),
+        cachedAt: storedAt,
+        isFresh: isFresh,
+      );
     } on Object {
       await preferences.remove(key);
       return null;
@@ -176,4 +251,28 @@ class MarketCache {
   String _historyKey(PriceUnit unit, int days) {
     return 'market.history.${unit.apiCurrency}.$days';
   }
+}
+
+class CachedMarketValue<T> {
+  const CachedMarketValue({
+    required this.value,
+    required this.cachedAt,
+    required this.isFresh,
+  });
+
+  final T value;
+  final DateTime cachedAt;
+  final bool isFresh;
+}
+
+class _MarketCacheEntry {
+  const _MarketCacheEntry({
+    required this.data,
+    required this.cachedAt,
+    required this.isFresh,
+  });
+
+  final Map<String, dynamic> data;
+  final DateTime cachedAt;
+  final bool isFresh;
 }

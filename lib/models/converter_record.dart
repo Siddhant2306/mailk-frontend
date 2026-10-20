@@ -60,7 +60,9 @@ class ConverterRecord {
         json['monolith_weight_g'] ?? json['monolith_weight_grams'],
       ),
       markings: _strings(json['markings']),
-      images: _strings(json['images'] ?? json['image_urls'] ?? json['image_url']),
+      images: _strings(
+        json['images'] ?? json['image_urls'] ?? json['image_url'],
+      ),
       ptPpm: _number(json['pt_ppm']),
       pdPpm: _number(json['pd_ppm']),
       rhPpm: _number(json['rh_ppm']),
@@ -87,21 +89,40 @@ class ConverterRecord {
   final double? rhPpm;
   final String? remarks;
   final String? notes;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'code_reference': codeReference,
+    'converter_code': converterCode,
+    if (brandId != null) 'brand_id': brandId,
+    if (brandName != null) 'brand_name': brandName,
+    if (model != null) 'model': model,
+    if (country != null) 'country': country,
+    if (converterType != null) 'converter_type': converterType,
+    if (category != null) 'category': category,
+    if (localLingo != null) 'local_lingo': localLingo,
+    if (monolithWeightGrams != null)
+      'monolith_weight_grams': monolithWeightGrams,
+    'markings': markings,
+    'images': images,
+    if (ptPpm != null) 'pt_ppm': ptPpm,
+    if (pdPpm != null) 'pd_ppm': pdPpm,
+    if (rhPpm != null) 'rh_ppm': rhPpm,
+    if (remarks != null) 'remarks': remarks,
+    if (notes != null) 'notes': notes,
+  };
 }
 
 class ConverterCatalogPage {
   const ConverterCatalogPage({
     required this.converters,
-    required this.total,
-    required this.page,
+    required this.hasMore,
     required this.pageSize,
-    this.totalPages,
+    this.nextCursor,
   });
 
   factory ConverterCatalogPage.fromJson(
     dynamic responseData, {
-    required int requestedPage,
-    required int requestedPageSize,
     Map<int, String> brandsById = const {},
   }) {
     if (responseData is! Map) {
@@ -130,15 +151,25 @@ class ConverterCatalogPage {
       );
     }
 
-    final total = _intValue(
-      metadata['total'] ??
-          metadata['total_count'] ??
-          response['total'] ??
-          response['total_count'],
-    );
-    if (total == null || total < 0) {
+    final pageSize = _intValue(metadata['page_size'] ?? metadata['pageSize']);
+    final hasMore = metadata['has_more'] ?? metadata['hasMore'];
+    if (pageSize == null || pageSize < 1 || hasMore is! bool) {
       throw const FormatException(
-        'The converter catalogue response has no valid total count.',
+        'The converter catalogue response has invalid pagination metadata.',
+      );
+    }
+
+    final rawNextCursor = metadata['next_cursor'] ?? metadata['nextCursor'];
+    final nextCursor = rawNextCursor == null
+        ? null
+        : rawNextCursor is String || rawNextCursor is num
+        ? rawNextCursor.toString().trim()
+        : throw const FormatException(
+            'The converter catalogue response has an invalid cursor.',
+          );
+    if (nextCursor != null && nextCursor.isEmpty) {
+      throw const FormatException(
+        'The converter catalogue response has an invalid cursor.',
       );
     }
 
@@ -159,28 +190,23 @@ class ConverterCatalogPage {
 
     return ConverterCatalogPage(
       converters: List.unmodifiable(converters),
-      total: total,
-      page: _intValue(metadata['page']) ?? requestedPage,
-      pageSize:
-          _intValue(metadata['page_size'] ?? metadata['pageSize']) ??
-          requestedPageSize,
-      totalPages:
-          _intValue(metadata['total_pages'] ?? metadata['totalPages']),
+      hasMore: hasMore && nextCursor != null,
+      nextCursor: nextCursor,
+      pageSize: pageSize,
     );
   }
 
   final List<ConverterRecord> converters;
-  final int total;
-  final int page;
+  final bool hasMore;
+  final String? nextCursor;
   final int pageSize;
-  final int? totalPages;
 
-  bool get hasMore {
-    if (totalPages != null) {
-      return page < totalPages!;
-    }
-    return converters.isNotEmpty && page * pageSize < total;
-  }
+  Map<String, dynamic> toJson() => {
+    'items': [for (final converter in converters) converter.toJson()],
+    'next_cursor': nextCursor,
+    'has_more': hasMore,
+    'page_size': pageSize,
+  };
 }
 
 int? _intValue(dynamic value) {

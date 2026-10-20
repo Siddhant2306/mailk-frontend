@@ -13,6 +13,7 @@ class MarketChart extends StatelessWidget {
     required this.selectedUnit,
     required this.history,
     required this.isLoading,
+    required this.isStale,
     required this.onMetalChanged,
     required this.onUnitChanged,
     super.key,
@@ -22,6 +23,7 @@ class MarketChart extends StatelessWidget {
   final PriceUnit selectedUnit;
   final List<MetalPrice> history;
   final bool isLoading;
+  final bool isStale;
   final ValueChanged<MetalType> onMetalChanged;
   final ValueChanged<PriceUnit> onUnitChanged;
 
@@ -43,17 +45,28 @@ class MarketChart extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  _ChartTitle(),
-                  const Spacer(),
-                  for (final metal in MetalType.values) ...[
-                    _MetalSelector(
-                      metal: metal,
-                      isSelected: selectedMetal == metal,
-                      onPressed: () => onMetalChanged(metal),
+                  Flexible(
+                    child: FittedBox(
+                      alignment: Alignment.centerLeft,
+                      fit: BoxFit.scaleDown,
+                      child: _ChartTitle(isStale: isStale),
                     ),
-                    if (metal != MetalType.values.last)
-                      const SizedBox(width: 5),
-                  ],
+                  ),
+                  const SizedBox(width: 6),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final metal in MetalType.values) ...[
+                        _MetalSelector(
+                          metal: metal,
+                          isSelected: selectedMetal == metal,
+                          onPressed: () => onMetalChanged(metal),
+                        ),
+                        if (metal != MetalType.values.last)
+                          const SizedBox(width: 5),
+                      ],
+                    ],
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -100,7 +113,9 @@ class MarketChart extends StatelessWidget {
 }
 
 class _ChartTitle extends StatelessWidget {
-  const _ChartTitle();
+  const _ChartTitle({required this.isStale});
+
+  final bool isStale;
 
   @override
   Widget build(BuildContext context) {
@@ -119,15 +134,23 @@ class _ChartTitle extends StatelessWidget {
         SizedBox(width: 7),
         DecoratedBox(
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF14251D) : const Color(0xFFE8F6EC),
+            color: isStale
+                ? (isDark ? const Color(0xFF2A2420) : const Color(0xFFFFF3DA))
+                : (isDark ? const Color(0xFF14251D) : const Color(0xFFE8F6EC)),
             borderRadius: BorderRadius.all(Radius.circular(4)),
           ),
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             child: Text(
-              'LIVE',
+              isStale ? 'CACHED' : 'LIVE',
               style: TextStyle(
-                color: isDark ? const Color(0xFF63C18A) : const Color(0xFF267B46),
+                color: isStale
+                    ? (isDark
+                          ? const Color(0xFFF1BF64)
+                          : const Color(0xFF9A6400))
+                    : (isDark
+                          ? const Color(0xFF63C18A)
+                          : const Color(0xFF267B46)),
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
               ),

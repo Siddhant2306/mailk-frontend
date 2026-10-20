@@ -1,7 +1,11 @@
+import 'dart:async';
+import 'dart:developer' as developer;
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../config/api_config.dart';
 import '../firebase_options.dart';
 import 'login.dart';
 
@@ -56,25 +60,49 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _initializeFirebase() async {
+    final stopwatch = Stopwatch()..start();
+
+    void mark(String message) {
+      developer.log(
+        '${stopwatch.elapsedMilliseconds} ms | $message',
+        name: 'malik.startup',
+      );
+    }
+
     if (!mounted) {
+      mark('Widget is no longer mounted');
       return;
     }
+
     setState(() {
       _isInitializingFirebase = true;
       _initializationError = null;
     });
+
     try {
+      mark('Firebase initialization started');
+
       final initialize =
           widget.initializeFirebase ??
           () => Firebase.initializeApp(
             options: DefaultFirebaseOptions.currentPlatform,
           );
-      await initialize();
+
+      await initialize().timeout(ApiConfig.firebaseStartupTimeout);
+
+      mark('Firebase initialization completed');
+
+      mark('Authentication state check started');
+
       final hasSession =
           await (widget.hasAuthenticatedSession?.call() ??
-              FirebaseAuth.instance.authStateChanges().first.then(
-                (user) => user != null,
-              ));
+                  FirebaseAuth.instance.authStateChanges().first.then(
+                    (user) => user != null,
+                  ))
+              .timeout(ApiConfig.firebaseStartupTimeout);
+
+      mark('Authentication state resolved: $hasSession');
+
       if (hasSession && mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute<void>(
@@ -82,13 +110,26 @@ class _SplashScreenState extends State<SplashScreen>
                 widget.authenticatedBuilder?.call() ?? const LoginScreen(),
           ),
         );
+
+        mark('Navigation triggered');
         return;
       }
+
       if (mounted) {
-        setState(() => _isResolvingSession = false);
+        setState(() {
+          _isResolvingSession = false;
+        });
       }
-    } on Object catch (error) {
-      debugPrint('Firebase initialization failed: $error');
+    } catch (error, stackTrace) {
+      mark('Startup failed: $error');
+
+      developer.log(
+        'Startup exception',
+        name: 'malik.startup',
+        error: error,
+        stackTrace: stackTrace,
+      );
+
       if (mounted) {
         setState(() {
           _initializationError = error.toString();
@@ -97,8 +138,12 @@ class _SplashScreenState extends State<SplashScreen>
       }
     } finally {
       if (mounted) {
-        setState(() => _isInitializingFirebase = false);
+        setState(() {
+          _isInitializingFirebase = false;
+        });
       }
+
+      mark('Startup routine finished');
     }
   }
 

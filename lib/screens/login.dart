@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:developer' as developer;
+
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +10,7 @@ import '../config/api_config.dart';
 import '../core/constants/constants.dart';
 import '../core/theme/app_palette.dart';
 import '../models/app_user.dart';
+import '../services/session_cache.dart';
 import 'home.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -21,7 +25,15 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController passwordController = TextEditingController();
 
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
-  final Dio _dio = Dio(BaseOptions(baseUrl: ApiConfig.baseUrl));
+  final SessionCache _sessionCache = SessionCache();
+  final Dio _dio = Dio(
+    BaseOptions(
+      baseUrl: ApiConfig.baseUrl,
+      connectTimeout: ApiConfig.apiConnectTimeout,
+      receiveTimeout: ApiConfig.sessionReceiveTimeout,
+      responseType: ResponseType.json,
+    ),
+  );
 
   bool obscurePassword = true;
   bool isLoading = false;
@@ -46,11 +58,22 @@ class _LoginScreenState extends State<LoginScreen> {
   // ============================================================
 
   Future<void> _checkExistingSession() async {
+    final stopwatch = Stopwatch()..start();
+
+    void mark(String message) {
+      developer.log(
+        '${stopwatch.elapsedMilliseconds} ms | $message',
+        name: 'malik.session',
+      );
+    }
+
     try {
+      mark('Existing-session check started');
       final firebaseUser = _firebaseAuth.currentUser;
 
       // No previous Firebase session.
       if (firebaseUser == null) {
+        mark('No persisted Firebase session');
         if (mounted) {
           setState(() {
             isCheckingSession = false;
@@ -59,22 +82,60 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      debugPrint('Existing Firebase session found.');
-      debugPrint('Firebase UID: ${firebaseUser.uid}');
-      debugPrint('Firebase Email: ${firebaseUser.email}');
+      mark('Persisted Firebase session found');
+
+      final cachedSession = await _sessionCache.readForFirebaseUid(
+        firebaseUser.uid,
+      );
+      if (cachedSession != null) {
+        mark('Cached account snapshot restored');
+        _openHome(
+          cachedSession.user,
+          firebaseUid: firebaseUser.uid,
+          isSessionVerified: false,
+        );
+        return;
+      }
 
       await _checkBackendAccount(firebaseUser);
-    } catch (e) {
-      debugPrint('Session check failed: $e');
-
-      // If something goes wrong while restoring the session,
-      // don't leave the user stuck on the splash/loading screen.
-      if (mounted) {
-        setState(() {
-          isCheckingSession = false;
-        });
+      mark('Existing-session check completed');
+      if (mounted && isCheckingSession) {
+        setState(() => isCheckingSession = false);
       }
+    } on TimeoutException {
+      mark('Existing-session check timed out');
+      _finishExistingSessionCheck(
+        'The secure service is taking too long to respond. Please try again.',
+      );
+    } on DioException catch (error) {
+      mark('Existing-session backend check failed: ${error.type.name}');
+      _finishExistingSessionCheck(
+        'Could not reach the secure service. Please try again.',
+      );
+    } on Object catch (error, stackTrace) {
+      mark('Existing-session check failed: ${error.runtimeType}');
+      developer.log(
+        'Existing-session check failed.',
+        name: 'malik.session',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      _finishExistingSessionCheck(
+        'Unable to restore your session. Please sign in again.',
+      );
     }
+  }
+
+  void _finishExistingSessionCheck(String message) {
+    if (!mounted) {
+      return;
+    }
+    setState(() => isCheckingSession = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _showMessage(message);
+      }
+    });
   }
 
   // ============================================================
@@ -86,9 +147,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
-      _showMessage(
-        'Please enter your email and password.',
-      );
+      _showMessage('Please enter your email and password.');
       return;
     }
 
@@ -103,8 +162,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // 1. LOGIN WITH FIREBASE
       // ----------------------------------------------------------
 
-      final credential =
-          await _firebaseAuth.signInWithEmailAndPassword(
+      final credential = await _firebaseAuth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -112,14 +170,10 @@ class _LoginScreenState extends State<LoginScreen> {
       final firebaseUser = credential.user;
 
       if (firebaseUser == null) {
-        throw Exception(
-          'Unable to retrieve Firebase user.',
-        );
+        throw Exception('Unable to retrieve Firebase user.');
       }
 
-      debugPrint('Firebase login successful.');
-      debugPrint('Firebase UID: ${firebaseUser.uid}');
-      debugPrint('Firebase Email: ${firebaseUser.email}');
+      developer.log('Firebase sign-in completed.', name: 'malik.session');
 
       // ----------------------------------------------------------
       // 2. CHECK BACKEND ACCOUNT
@@ -127,9 +181,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       await _checkBackendAccount(firebaseUser);
     } on FirebaseAuthException catch (e) {
-      debugPrint(
-        'Firebase login error: ${e.code}',
-      );
+      debugPrint('Firebase login error: ${e.code}');
 
       String message = 'Login failed.';
 
@@ -155,13 +207,11 @@ class _LoginScreenState extends State<LoginScreen> {
           break;
 
         case 'too-many-requests':
-          message =
-              'Too many login attempts. Please try again later.';
+          message = 'Too many login attempts. Please try again later.';
           break;
 
         case 'network-request-failed':
-          message =
-              'Network error. Please check your internet connection.';
+          message = 'Network error. Please check your internet connection.';
           break;
 
         default:
@@ -169,26 +219,22 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       _showMessage(message);
+    } on TimeoutException {
+      _showMessage(
+        'Authentication timed out. Check your connection and try again.',
+      );
     } on DioException catch (e) {
-      debugPrint(
-        'Backend error: ${e.response?.data}',
-      );
-
-      debugPrint(
-        'Backend status: ${e.response?.statusCode}',
-      );
-
-      debugPrint(
-        'Backend message: ${e.message}',
+      developer.log(
+        'Backend sign-in check failed: ${e.type.name} '
+        '(status ${e.response?.statusCode ?? 'unavailable'}).',
+        name: 'malik.session',
       );
 
       await _handleBackendError(e);
     } catch (e) {
       debugPrint('Login error: $e');
 
-      _showMessage(
-        'Something went wrong. Please try again.',
-      );
+      _showMessage('Something went wrong. Please try again.');
     } finally {
       if (mounted) {
         setState(() {
@@ -202,21 +248,18 @@ class _LoginScreenState extends State<LoginScreen> {
   // CHECK BACKEND ACCOUNT
   // ============================================================
 
-  Future<void> _checkBackendAccount(
-    User firebaseUser,
-  ) async {
+  Future<void> _checkBackendAccount(User firebaseUser) async {
     try {
       // Firebase ID token.
-      final idToken = await firebaseUser.getIdToken();
+      final idToken = await firebaseUser.getIdToken().timeout(
+        ApiConfig.firebaseTokenTimeout,
+      );
 
       if (idToken == null) {
-        throw Exception(
-          'Unable to retrieve Firebase ID token.',
-        );
+        throw Exception('Unable to retrieve Firebase ID token.');
       }
 
-      debugPrint('Firebase ID token received.');
-      debugPrint(idToken);
+      developer.log('Firebase ID token acquired.', name: 'malik.session');
 
       // ----------------------------------------------------------
       // IMPORTANT:
@@ -229,44 +272,34 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final response = await _dio.get(
         ApiConstants.currentUser,
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $idToken',
-          },
-        ),
+        options: Options(headers: {'Authorization': 'Bearer $idToken'}),
       );
 
-      debugPrint(
-        'Backend response: ${response.data}',
+      developer.log(
+        'Backend account response received: ${response.statusCode}.',
+        name: 'malik.session',
       );
 
       final data = response.data;
 
       if (data is! Map) {
-        throw Exception(
-          'Invalid backend response.',
-        );
+        throw Exception('Invalid backend response.');
       }
 
       final currentUser = AppUser.fromJson(Map<String, dynamic>.from(data));
       final status = currentUser.status;
       final isActive = currentUser.isActive;
 
-      debugPrint('MALIK account status: $status');
-      debugPrint('MALIK account active: $isActive');
-
       // ----------------------------------------------------------
       // PENDING
       // ----------------------------------------------------------
 
       if (status == 'pending') {
-        await _firebaseAuth.signOut();
+        await _signOutAndClearSession();
 
         if (!mounted) return;
 
-        _showMessage(
-          'Your account is waiting for admin approval.',
-        );
+        _showMessage('Your account is waiting for admin approval.');
 
         return;
       }
@@ -276,13 +309,11 @@ class _LoginScreenState extends State<LoginScreen> {
       // ----------------------------------------------------------
 
       if (status == 'rejected') {
-        await _firebaseAuth.signOut();
+        await _signOutAndClearSession();
 
         if (!mounted) return;
 
-        _showMessage(
-          'Your account has been rejected.',
-        );
+        _showMessage('Your account has been rejected.');
 
         return;
       }
@@ -292,13 +323,11 @@ class _LoginScreenState extends State<LoginScreen> {
       // ----------------------------------------------------------
 
       if (status == 'blocked' || isActive == false) {
-        await _firebaseAuth.signOut();
+        await _signOutAndClearSession();
 
         if (!mounted) return;
 
-        _showMessage(
-          'Your account has been blocked.',
-        );
+        _showMessage('Your account has been blocked.');
 
         return;
       }
@@ -308,7 +337,15 @@ class _LoginScreenState extends State<LoginScreen> {
       // ----------------------------------------------------------
 
       if (status == 'approved' && isActive == true) {
-        _openHome(currentUser);
+        await _sessionCache.write(
+          firebaseUid: firebaseUser.uid,
+          user: currentUser,
+        );
+        _openHome(
+          currentUser,
+          firebaseUid: firebaseUser.uid,
+          isSessionVerified: true,
+        );
         return;
       }
 
@@ -316,27 +353,23 @@ class _LoginScreenState extends State<LoginScreen> {
       // UNKNOWN STATUS
       // ----------------------------------------------------------
 
-      await _firebaseAuth.signOut();
+      await _signOutAndClearSession();
 
       if (!mounted) return;
 
-      _showMessage(
-        'Your account does not have valid access.',
-      );
+      _showMessage('Your account does not have valid access.');
+    } on TimeoutException {
+      rethrow;
     } on DioException {
       rethrow;
     } catch (e) {
-      debugPrint(
-        'Backend account check failed: $e',
-      );
+      debugPrint('Backend account check failed: $e');
 
-      await _firebaseAuth.signOut();
+      await _signOutAndClearSession();
 
       if (!mounted) return;
 
-      _showMessage(
-        'Unable to verify your MALIK account.',
-      );
+      _showMessage('Unable to verify your MALIK account.');
     }
   }
 
@@ -344,9 +377,7 @@ class _LoginScreenState extends State<LoginScreen> {
   // HANDLE BACKEND ERRORS
   // ============================================================
 
-  Future<void> _handleBackendError(
-    DioException e,
-  ) async {
+  Future<void> _handleBackendError(DioException e) async {
     final statusCode = e.response?.statusCode;
     final responseData = e.response?.data;
 
@@ -357,13 +388,11 @@ class _LoginScreenState extends State<LoginScreen> {
     // ----------------------------------------------------------
 
     if (statusCode == 404) {
-      await _firebaseAuth.signOut();
+      await _signOutAndClearSession();
 
       if (!mounted) return;
 
-      _showMessage(
-        'Your MALIK account has not been registered.',
-      );
+      _showMessage('Your MALIK account has not been registered.');
 
       return;
     }
@@ -375,13 +404,11 @@ class _LoginScreenState extends State<LoginScreen> {
     // ----------------------------------------------------------
 
     if (statusCode == 401) {
-      await _firebaseAuth.signOut();
+      await _signOutAndClearSession();
 
       if (!mounted) return;
 
-      _showMessage(
-        'Your session has expired. Please sign in again.',
-      );
+      _showMessage('Your session has expired. Please sign in again.');
 
       return;
     }
@@ -391,10 +418,9 @@ class _LoginScreenState extends State<LoginScreen> {
     // ----------------------------------------------------------
 
     if (statusCode == 403) {
-      await _firebaseAuth.signOut();
+      await _signOutAndClearSession();
 
-      String message =
-          'You do not have access to MALIK.';
+      String message = 'You do not have access to MALIK.';
 
       if (responseData is Map) {
         final detail = responseData['detail'];
@@ -416,7 +442,11 @@ class _LoginScreenState extends State<LoginScreen> {
     // ----------------------------------------------------------
 
     String message =
-        'Could not connect to the server.';
+        e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.sendTimeout
+        ? 'The server is taking too long to respond. Please try again.'
+        : 'Could not connect to the server.';
 
     if (responseData is Map) {
       final detail = responseData['detail'];
@@ -433,12 +463,25 @@ class _LoginScreenState extends State<LoginScreen> {
   // OPEN HOME
   // ============================================================
 
-  void _openHome(AppUser currentUser) {
+  Future<void> _signOutAndClearSession() async {
+    await _sessionCache.clear();
+    await _firebaseAuth.signOut();
+  }
+
+  void _openHome(
+    AppUser currentUser, {
+    required String firebaseUid,
+    required bool isSessionVerified,
+  }) {
     if (!mounted) return;
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (_) => HomeScreen(currentUser: currentUser),
+        builder: (_) => HomeScreen(
+          currentUser: currentUser,
+          firebaseUid: firebaseUid,
+          isSessionVerified: isSessionVerified,
+        ),
       ),
       (route) => false,
     );
@@ -452,44 +495,32 @@ class _LoginScreenState extends State<LoginScreen> {
     final email = emailController.text.trim();
 
     if (email.isEmpty) {
-      _showMessage(
-        'Enter your email address first.',
-      );
+      _showMessage('Enter your email address first.');
       return;
     }
 
     try {
-      await _firebaseAuth.sendPasswordResetEmail(
-        email: email,
-      );
+      await _firebaseAuth.sendPasswordResetEmail(email: email);
 
       if (!mounted) return;
 
-      _showMessage(
-        'Password reset email sent.',
-      );
+      _showMessage('Password reset email sent.');
     } on FirebaseAuthException catch (e) {
-      debugPrint(
-        'Password reset error: ${e.code}',
-      );
+      debugPrint('Password reset error: ${e.code}');
 
-      String message =
-          'Could not send password reset email.';
+      String message = 'Could not send password reset email.';
 
       switch (e.code) {
         case 'invalid-email':
-          message =
-              'Please enter a valid email address.';
+          message = 'Please enter a valid email address.';
           break;
 
         case 'user-not-found':
-          message =
-              'No account found with this email.';
+          message = 'No account found with this email.';
           break;
 
         case 'network-request-failed':
-          message =
-              'Network error. Please try again.';
+          message = 'Network error. Please try again.';
           break;
 
         default:
@@ -498,13 +529,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
       _showMessage(message);
     } catch (e) {
-      debugPrint(
-        'Password reset failed: $e',
-      );
+      debugPrint('Password reset failed: $e');
 
-      _showMessage(
-        'Could not send password reset email.',
-      );
+      _showMessage('Could not send password reset email.');
     }
   }
 
@@ -517,29 +544,21 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const SignUpScreen(),
-      ),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const SignUpScreen()));
   }
 
   // ============================================================
   // MESSAGE
   // ============================================================
 
-  void _showMessage(
-    String message,
-  ) {
+  void _showMessage(String message) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
       );
   }
 
@@ -573,56 +592,36 @@ class _LoginScreenState extends State<LoginScreen> {
 
           if (isDark)
             Positioned.fill(
-              child: Image.asset(
-                'assets/login_bg.png',
-                fit: BoxFit.cover,
-              ),
+              child: Image.asset('assets/login_bg.png', fit: BoxFit.cover),
             ),
 
           // ------------------------------------------------------
           // DARK OVERLAY
           // ------------------------------------------------------
-
-          if (isDark)
-            Container(
-              color: Colors.black.withValues(alpha: 0.30),
-            ),
+          if (isDark) Container(color: Colors.black.withValues(alpha: 0.30)),
 
           // ------------------------------------------------------
           // CONTENT
           // ------------------------------------------------------
-
           SafeArea(
             child: LayoutBuilder(
-              builder: (
-                context,
-                constraints,
-              ) {
+              builder: (context, constraints) {
                 return SingleChildScrollView(
-                  physics:
-                      const BouncingScrollPhysics(),
+                  physics: const BouncingScrollPhysics(),
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
-                      minHeight:
-                          constraints.maxHeight,
+                      minHeight: constraints.maxHeight,
                     ),
                     child: Padding(
-                      padding:
-                          const EdgeInsets.symmetric(
-                        horizontal: 14,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
                       child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const SizedBox(
-                            height: 105,
-                          ),
+                          const SizedBox(height: 105),
 
                           // ------------------------------------------------
                           // LOGO
                           // ------------------------------------------------
-
                           Center(
                             child: Column(
                               children: [
@@ -638,23 +637,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                   style: TextStyle(
                                     color: palette.textPrimary,
                                     fontSize: 35,
-                                    fontWeight:
-                                        FontWeight.w600,
+                                    fontWeight: FontWeight.w600,
                                     letterSpacing: 6,
                                   ),
                                 ),
 
-                                const SizedBox(
-                                  height: 3,
-                                ),
+                                const SizedBox(height: 3),
 
                                 Text(
                                   'CATALYTIC CATALOGUE',
                                   style: TextStyle(
                                     color: palette.accent,
                                     fontSize: 12,
-                                    fontWeight:
-                                        FontWeight.w600,
+                                    fontWeight: FontWeight.w600,
                                     letterSpacing: 2,
                                   ),
                                 ),
@@ -662,27 +657,21 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
 
-                          const SizedBox(
-                            height: 28,
-                          ),
+                          const SizedBox(height: 28),
 
                           // ------------------------------------------------
                           // TITLE
                           // ------------------------------------------------
-
                           Text(
                             'Welcome Back',
                             style: TextStyle(
                               color: palette.textPrimary,
                               fontSize: 25,
-                              fontWeight:
-                                  FontWeight.w600,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
 
-                          const SizedBox(
-                            height: 3,
-                          ),
+                          const SizedBox(height: 3),
 
                           Text(
                             'Sign in to continue to your account',
@@ -692,72 +681,50 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
 
-                          const SizedBox(
-                            height: 13,
-                          ),
+                          const SizedBox(height: 13),
 
                           // ------------------------------------------------
                           // EMAIL
                           // ------------------------------------------------
-
                           _buildInputField(
-                            controller:
-                                emailController,
-                            hintText:
-                                'Email address',
-                            icon:
-                                Icons.mail_outline,
-                            keyboardType:
-                                TextInputType
-                                    .emailAddress,
-                            textInputAction:
-                                TextInputAction.next,
+                            controller: emailController,
+                            hintText: 'Email address',
+                            icon: Icons.mail_outline,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
                           ),
 
-                          const SizedBox(
-                            height: 10,
-                          ),
+                          const SizedBox(height: 10),
 
                           // ------------------------------------------------
                           // PASSWORD
                           // ------------------------------------------------
-
                           _buildInputField(
-                            controller:
-                                passwordController,
+                            controller: passwordController,
                             hintText: 'Password',
-                            icon:
-                                Icons.lock_outline,
-                            obscureText:
-                                obscurePassword,
-                            textInputAction:
-                                TextInputAction.done,
+                            icon: Icons.lock_outline,
+                            obscureText: obscurePassword,
+                            textInputAction: TextInputAction.done,
                             onSubmitted: (_) {
                               if (!isLoading) {
                                 _login();
                               }
                             },
-                            suffixIcon:
-                                IconButton(
+                            suffixIcon: IconButton(
                               onPressed: () {
                                 setState(() {
-                                  obscurePassword =
-                                      !obscurePassword;
+                                  obscurePassword = !obscurePassword;
                                 });
                               },
                               icon: Icon(
                                 obscurePassword
-                                    ? Icons
-                                        .visibility_off_outlined
-                                    : Icons
-                                        .visibility_outlined,
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
                                 color: palette.textMuted,
                                 size: 20,
                               ),
-                              padding:
-                                  EdgeInsets.zero,
-                              constraints:
-                                  const BoxConstraints(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
                                 minWidth: 40,
                                 minHeight: 34,
                               ),
@@ -767,19 +734,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           // ------------------------------------------------
                           // FORGOT PASSWORD
                           // ------------------------------------------------
-
                           Align(
-                            alignment:
-                                Alignment.centerRight,
+                            alignment: Alignment.centerRight,
                             child: Padding(
-                              padding:
-                                  const EdgeInsets.only(
-                                top: 10,
-                              ),
+                              padding: const EdgeInsets.only(top: 10),
                               child: GestureDetector(
-                                onTap: isLoading
-                                    ? null
-                                    : _forgotPassword,
+                                onTap: isLoading ? null : _forgotPassword,
                                 child: Text(
                                   'Forgot Password?',
                                   style: TextStyle(
@@ -791,96 +751,59 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
 
-                          const SizedBox(
-                            height: 14,
-                          ),
+                          const SizedBox(height: 14),
 
                           // ------------------------------------------------
                           // LOGIN BUTTON
                           // ------------------------------------------------
-
                           SizedBox(
                             width: double.infinity,
                             height: 40,
-                            child:
-                                ElevatedButton(
-                              onPressed:
-                                  isLoading
-                                      ? null
-                                      : _login,
-                              style:
-                                  ElevatedButton
-                                      .styleFrom(
-                                backgroundColor:
-                                    const Color(
-                                  0xFFFFB21A,
-                                ),
-                                foregroundColor:
-                                    Colors.black,
+                            child: ElevatedButton(
+                              onPressed: isLoading ? null : _login,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFFFB21A),
+                                foregroundColor: Colors.black,
                                 elevation: 8,
-                                shadowColor:
-                                    const Color(
-                                  0xFFFFB21A,
-                                ).withValues(
-                                  alpha: 0.35,
+                                shadowColor: const Color(0xFFFFB21A)
+                                    .withValues(alpha: 0.35),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(9),
                                 ),
-                                shape:
-                                    RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(9),
-                                ),
-                                padding:
-                                    EdgeInsets.zero,
+                                padding: EdgeInsets.zero,
                               ),
                               child: isLoading
                                   ? const SizedBox(
                                       width: 18,
                                       height: 18,
-                                      child:
-                                          CircularProgressIndicator(
-                                        color:
-                                            Colors.black,
-                                        strokeWidth:
-                                            2.2,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.black,
+                                        strokeWidth: 2.2,
                                       ),
                                     )
                                   : const Row(
                                       mainAxisAlignment:
-                                          MainAxisAlignment
-                                              .center,
+                                          MainAxisAlignment.center,
                                       children: [
                                         Text(
                                           'Login',
-                                          style:
-                                              TextStyle(
+                                          style: TextStyle(
                                             fontSize: 12,
-                                            fontWeight:
-                                                FontWeight
-                                                    .w700,
+                                            fontWeight: FontWeight.w700,
                                           ),
                                         ),
-                                        SizedBox(
-                                          width: 9,
-                                        ),
-                                        Icon(
-                                          Icons
-                                              .arrow_forward,
-                                          size: 15,
-                                        ),
+                                        SizedBox(width: 9),
+                                        Icon(Icons.arrow_forward, size: 15),
                                       ],
                                     ),
                             ),
                           ),
 
-                          const SizedBox(
-                            height: 19,
-                          ),
+                          const SizedBox(height: 19),
 
                           // ------------------------------------------------
                           // OR
                           // ------------------------------------------------
-
                           Row(
                             children: [
                               Expanded(
@@ -890,8 +813,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(
+                                padding: const EdgeInsets.symmetric(
                                   horizontal: 12,
                                 ),
                                 child: Text(
@@ -911,9 +833,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                           ),
 
-                          const SizedBox(
-                            height: 13,
-                          ),
+                          const SizedBox(height: 13),
 
                           // ------------------------------------------------
                           // GOOGLE
@@ -922,61 +842,40 @@ class _LoginScreenState extends State<LoginScreen> {
                           // disabled until Google provider configuration
                           // is completed in Firebase.
                           // ------------------------------------------------
-
                           SizedBox(
                             width: double.infinity,
                             height: 40,
-                            child:
-                                OutlinedButton(
+                            child: OutlinedButton(
                               onPressed: () {
                                 _showMessage(
                                   'Google sign-in will be enabled after Firebase Google authentication is configured.',
                                 );
                               },
-                              style:
-                                  OutlinedButton
-                                      .styleFrom(
-                                side:
-                                    BorderSide(
-                                  color: palette.border,
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: palette.border),
+                                backgroundColor: palette.surfaceElevated,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                                backgroundColor:
-                                    palette.surfaceElevated,
-                                shape:
-                                    RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(8),
-                                ),
-                                padding:
-                                    EdgeInsets.zero,
+                                padding: EdgeInsets.zero,
                               ),
                               child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment
-                                        .center,
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Image(
-                                    image:
-                                        const AssetImage(
+                                    image: const AssetImage(
                                       'assets/google.png',
                                     ),
                                     width: 20,
                                     height: 20,
                                   ),
-                                  const SizedBox(
-                                    width: 8,
-                                  ),
+                                  const SizedBox(width: 8),
                                   Text(
                                     'Continue with Google',
-                                    style:
-                                        TextStyle(
-                                      color:
-                                          palette.textSecondary,
+                                    style: TextStyle(
+                                      color: palette.textSecondary,
                                       fontSize: 15,
-                                      fontWeight:
-                                          FontWeight
-                                              .w500,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ],
@@ -984,44 +883,30 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
 
-                          const SizedBox(
-                            height: 17,
-                          ),
+                          const SizedBox(height: 17),
 
                           // ------------------------------------------------
                           // SIGN UP
                           // ------------------------------------------------
-
                           Center(
-                            child:
-                                GestureDetector(
-                              onTap:
-                                  _openSignUp,
-                              child:
-                                  Text.rich(
+                            child: GestureDetector(
+                              onTap: _openSignUp,
+                              child: Text.rich(
                                 TextSpan(
                                   children: [
                                     TextSpan(
-                                      text:
-                                          "Don't have an account? ",
-                                      style:
-                                          TextStyle(
-                                        color:
-                                            palette.textMuted,
+                                      text: "Don't have an account? ",
+                                      style: TextStyle(
+                                        color: palette.textMuted,
                                         fontSize: 12,
                                       ),
                                     ),
                                     TextSpan(
-                                      text:
-                                          'Sign Up',
-                                      style:
-                                          TextStyle(
-                                        color:
-                                            palette.accent,
+                                      text: 'Sign Up',
+                                      style: TextStyle(
+                                        color: palette.accent,
                                         fontSize: 12,
-                                        fontWeight:
-                                            FontWeight
-                                                .w600,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ],
@@ -1030,9 +915,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
 
-                          const SizedBox(
-                            height: 18,
-                          ),
+                          const SizedBox(height: 18),
                         ],
                       ),
                     ),
@@ -1069,53 +952,27 @@ class _LoginScreenState extends State<LoginScreen> {
         keyboardType: keyboardType,
         textInputAction: textInputAction,
         onSubmitted: onSubmitted,
-        style: TextStyle(
-          color: palette.textPrimary,
-          fontSize: 15,
-        ),
+        style: TextStyle(color: palette.textPrimary, fontSize: 15),
         cursorColor: palette.accent,
         decoration: InputDecoration(
           hintText: hintText,
-          hintStyle: TextStyle(
-            color: palette.textMuted,
-            fontSize: 15,
-          ),
-          prefixIcon: Icon(
-            icon,
-            color: palette.textMuted,
-            size: 14,
-          ),
+          hintStyle: TextStyle(color: palette.textMuted, fontSize: 15),
+          prefixIcon: Icon(icon, color: palette.textMuted, size: 14),
           suffixIcon: suffixIcon,
-          prefixIconConstraints:
-              const BoxConstraints(
+          prefixIconConstraints: const BoxConstraints(
             minWidth: 40,
             minHeight: 34,
           ),
-          contentPadding:
-              const EdgeInsets.symmetric(
-            horizontal: 10,
-          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10),
           filled: true,
           fillColor: palette.input,
-          enabledBorder:
-              OutlineInputBorder(
-            borderRadius:
-                BorderRadius.circular(9),
-            borderSide:
-                BorderSide(
-                color: palette.border,
-              width: 1,
-            ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(9),
+            borderSide: BorderSide(color: palette.border, width: 1),
           ),
-          focusedBorder:
-              OutlineInputBorder(
-            borderRadius:
-                BorderRadius.circular(9),
-            borderSide:
-                BorderSide(
-                color: palette.accent,
-              width: 1,
-            ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(9),
+            borderSide: BorderSide(color: palette.accent, width: 1),
           ),
         ),
       ),
@@ -1139,21 +996,13 @@ class _SessionCheckingScreen extends StatelessWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          if (isDark)
-            Image.asset(
-              'assets/login_bg.png',
-              fit: BoxFit.cover,
-            ),
+          if (isDark) Image.asset('assets/login_bg.png', fit: BoxFit.cover),
 
-          if (isDark)
-            Container(
-              color: Colors.black.withValues(alpha: 0.45),
-            ),
+          if (isDark) Container(color: Colors.black.withValues(alpha: 0.45)),
 
           Center(
             child: Column(
-              mainAxisSize:
-                  MainAxisSize.min,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Image.asset(
                   'assets/Logo.png',
@@ -1162,39 +1011,31 @@ class _SessionCheckingScreen extends StatelessWidget {
                   fit: BoxFit.contain,
                 ),
 
-                const SizedBox(
-                  height: 8,
-                ),
+                const SizedBox(height: 8),
 
                 Text(
                   'M A L I K',
                   style: TextStyle(
                     color: palette.textPrimary,
                     fontSize: 30,
-                    fontWeight:
-                        FontWeight.w600,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: 5,
                   ),
                 ),
 
-                const SizedBox(
-                  height: 5,
-                ),
+                const SizedBox(height: 5),
 
                 Text(
                   'CATALYTIC CATALOGUE',
                   style: TextStyle(
                     color: palette.accent,
                     fontSize: 10,
-                    fontWeight:
-                        FontWeight.w600,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: 1.6,
                   ),
                 ),
 
-                const SizedBox(
-                  height: 30,
-                ),
+                const SizedBox(height: 30),
 
                 SizedBox(
                   width: 22,

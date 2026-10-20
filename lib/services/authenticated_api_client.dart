@@ -14,8 +14,8 @@ class AuthenticatedApiClient {
           Dio(
             BaseOptions(
               baseUrl: ApiConfig.baseUrl,
-              connectTimeout: const Duration(seconds: 10),
-              receiveTimeout: const Duration(seconds: 25),
+              connectTimeout: ApiConfig.apiConnectTimeout,
+              receiveTimeout: ApiConfig.apiReceiveTimeout,
               responseType: ResponseType.json,
             ),
           ),
@@ -27,11 +27,15 @@ class AuthenticatedApiClient {
   Future<Response<dynamic>> get(
     String path, {
     Map<String, dynamic>? queryParameters,
+    Duration? receiveTimeout,
   }) async {
+    final options = await createAuthorizedOptions();
     return _dio.get(
       path,
       queryParameters: queryParameters,
-      options: await createAuthorizedOptions(),
+      options: receiveTimeout == null
+          ? options
+          : options.copyWith(receiveTimeout: receiveTimeout),
     );
   }
 

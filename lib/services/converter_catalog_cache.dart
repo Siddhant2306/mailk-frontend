@@ -10,7 +10,7 @@ class ConverterCatalogCache {
 
   final Duration ttl;
   final DateTime Function() _clock;
-  final Map<String, Map<int, _CachedCatalogPage>> _pages = {};
+  final Map<String, Map<String, _CachedCatalogPage>> _pages = {};
   final Map<String, int> _revisions = {};
   var _generation = 0;
 
@@ -18,16 +18,17 @@ class ConverterCatalogCache {
     required String search,
     required int? brandId,
     required int pageSize,
-    required int page,
+    required String? cursor,
   }) {
     final key = _key(search, brandId, pageSize);
     final cachedPages = _pages[key];
-    final cachedPage = cachedPages?[page];
+    final pageKey = _cursorKey(cursor);
+    final cachedPage = cachedPages?[pageKey];
     if (cachedPage == null) {
       return null;
     }
     if (!_clock().isBefore(cachedPage.expiresAt)) {
-      cachedPages!.remove(page);
+      cachedPages!.remove(pageKey);
       if (cachedPages.isEmpty) {
         _pages.remove(key);
       }
@@ -51,6 +52,7 @@ class ConverterCatalogCache {
     required String search,
     required int? brandId,
     required int pageSize,
+    required String? cursor,
     required ({int generation, int revision}) revision,
     required ConverterCatalogPage page,
   }) {
@@ -60,7 +62,7 @@ class ConverterCatalogCache {
       return;
     }
     final cachedPages = _pages.putIfAbsent(key, () => {});
-    cachedPages[page.page] = _CachedCatalogPage(
+    cachedPages[_cursorKey(cursor)] = _CachedCatalogPage(
       page: page,
       expiresAt: _clock().add(ttl),
     );
@@ -85,6 +87,8 @@ class ConverterCatalogCache {
   String _key(String search, int? brandId, int pageSize) {
     return '${search.trim()}\u0000${brandId ?? ''}\u0000$pageSize';
   }
+
+  String _cursorKey(String? cursor) => cursor ?? '';
 }
 
 class _CachedCatalogPage {

@@ -6,16 +6,39 @@ import '../models/converter_draft.dart';
 import 'authenticated_api_client.dart';
 import 'brand_service.dart';
 import 'converter_catalog_cache.dart';
+import 'persistent_converter_catalog_cache.dart';
 
 class ConverterService {
   ConverterService({
     AuthenticatedApiClient? apiClient,
     ConverterCatalogCache? catalogCache,
+    PersistentConverterCatalogCache? persistentCatalogCache,
   }) : _apiClient = apiClient ?? AuthenticatedApiClient(),
-       _catalogCache = catalogCache ?? ConverterCatalogCache.shared;
+       _catalogCache = catalogCache ?? ConverterCatalogCache.shared,
+       _persistentCatalogCache =
+           persistentCatalogCache ?? PersistentConverterCatalogCache.shared;
 
   final AuthenticatedApiClient _apiClient;
   final ConverterCatalogCache _catalogCache;
+  final PersistentConverterCatalogCache _persistentCatalogCache;
+
+  /// Reads the saved first catalogue page without making a network request.
+  ///
+  /// This is intentionally limited to the first page: it gives a cold launch
+  /// useful content immediately without persisting an unbounded result set.
+  Future<CachedConverterCatalogPage?> getCachedFirstPage({
+    int pageSize = 20,
+    String? search,
+    int? brandId,
+    Map<int, String> brandsById = const {},
+  }) {
+    return _persistentCatalogCache.read(
+      search: search?.trim() ?? '',
+      brandId: brandId,
+      pageSize: pageSize,
+      brandsById: brandsById,
+    );
+  }
 
   Future<String> uploadConverterImage({
     required List<int> bytes,
@@ -46,6 +69,7 @@ class ConverterService {
       throw const FormatException('Invalid converter creation response.');
     }
     _catalogCache.invalidateAll();
+    await _persistentCatalogCache.invalidateAll();
     BrandService.invalidateConverterBrandsCache();
     return data['converter_id'] as int;
   }
@@ -57,27 +81,57 @@ class ConverterService {
       data: draft.toJson(includeNulls: true),
     );
     _catalogCache.invalidateAll();
+    await _persistentCatalogCache.invalidateAll();
     BrandService.invalidateConverterBrandsCache();
   }
 
   Future<void> deleteConverter(int converterId) async {
     await _apiClient.delete(ApiConstants.adminConverterDetail(converterId));
     _catalogCache.invalidateAll();
+    await _persistentCatalogCache.invalidateAll();
     BrandService.invalidateConverterBrandsCache();
   }
 
   Future<ConverterCatalogPage> getConverters({
-    required int page,
     int pageSize = 20,
+    String? cursor,
     String? search,
     int? brandId,
     Map<int, String> brandsById = const {},
     bool forceRefresh = false,
   }) async {
+    if (pageSize < 1 || pageSize > 100) {
+      throw ArgumentError.value(
+        pageSize,
+        'pageSize',
+        'Must be between 1 and 100.',
+      );
+    }
     final normalizedSearch = search?.trim();
+    if (normalizedSearch != null && normalizedSearch.isNotEmpty) {
+      if (normalizedSearch.length < 3) {
+        throw ArgumentError.value(
+          search,
+          'search',
+          'Enter at least 3 characters to search.',
+        );
+      }
+      if (normalizedSearch.length > 100) {
+        throw ArgumentError.value(
+          search,
+          'search',
+          'Search terms can be at most 100 characters.',
+        );
+      }
+    }
     final cacheSearch = normalizedSearch ?? '';
-    if (forceRefresh && page == 1) {
+    if (forceRefresh && cursor == null) {
       _catalogCache.invalidate(
+        search: cacheSearch,
+        brandId: brandId,
+        pageSize: pageSize,
+      );
+      await _persistentCatalogCache.invalidate(
         search: cacheSearch,
         brandId: brandId,
         pageSize: pageSize,
@@ -88,7 +142,7 @@ class ConverterService {
         search: cacheSearch,
         brandId: brandId,
         pageSize: pageSize,
-        page: page,
+        cursor: cursor,
       );
       if (cachedPage != null) {
         return _withBrandNames(cachedPage, brandsById);
@@ -100,7 +154,10 @@ class ConverterService {
       brandId: brandId,
       pageSize: pageSize,
     );
-    final query = <String, dynamic>{'page': page, 'page_size': pageSize};
+    final query = <String, dynamic>{'page_size': pageSize};
+    if (cursor != null) {
+      query['cursor'] = cursor;
+    }
     if (normalizedSearch != null && normalizedSearch.isNotEmpty) {
       query['search'] = normalizedSearch;
     }
@@ -114,17 +171,24 @@ class ConverterService {
     );
     final result = ConverterCatalogPage.fromJson(
       response.data,
-      requestedPage: page,
-      requestedPageSize: pageSize,
       brandsById: brandsById,
     );
     _catalogCache.write(
       search: cacheSearch,
       brandId: brandId,
       pageSize: pageSize,
+      cursor: cursor,
       revision: cacheRevision,
       page: result,
     );
+    if (cursor == null) {
+      await _persistentCatalogCache.write(
+        search: cacheSearch,
+        brandId: brandId,
+        pageSize: pageSize,
+        page: result,
+      );
+    }
     return result;
   }
 
@@ -167,10 +231,9 @@ class ConverterService {
           );
         }),
       ),
-      total: page.total,
-      page: page.page,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
       pageSize: page.pageSize,
-      totalPages: page.totalPages,
     );
   }
 

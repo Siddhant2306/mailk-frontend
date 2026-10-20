@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:malik/core/constants/constants.dart';
 import 'package:malik/models/car_brand.dart';
 import 'package:malik/models/converter_draft.dart';
@@ -11,47 +12,52 @@ import 'package:malik/screens/converter_detail_screen.dart';
 import 'package:malik/screens/search_screen.dart';
 import 'package:malik/services/brand_service.dart';
 import 'package:malik/services/converter_catalog_cache.dart';
+import 'package:malik/services/persistent_converter_catalog_cache.dart';
 import 'package:malik/services/converter_service.dart';
 import 'package:malik/services/authenticated_api_client.dart';
 import 'package:malik/widgets/profile/converter_form_sheet.dart';
 
 void main() {
-  test('parses converter rows and page totals from the catalogue response', () {
-    final result = ConverterCatalogPage.fromJson(
-      {
-        'items': [
-          {
-            'id': 42,
-            'code_reference': 'ABC-42',
-            'converter_code': 420042,
-            'brand_id': 8,
-            'model': 'Swift',
-            'images': ['https://example.com/converter.png'],
-            'markings': ['86J C04'],
-            'monolith_weight_g': 750,
-            'pt_ppm': 400,
-          },
-        ],
-        'total': 450,
-        'page': 1,
-        'page_size': 20,
-        'total_pages': 23,
-      },
-      requestedPage: 1,
-      requestedPageSize: 20,
-      brandsById: const {8: 'Suzuki'},
-    );
-
-    expect(result.total, 450);
-    expect(result.hasMore, isTrue);
-    expect(result.converters.single.id, 42);
-    expect(result.converters.single.converterCode, '420042');
-    expect(result.converters.single.brandName, 'Suzuki');
-    expect(result.converters.single.model, 'Swift');
-    expect(result.converters.single.images, [
-      'https://example.com/converter.png',
-    ]);
+  setUpAll(() {
+    SharedPreferences.setMockInitialValues({});
   });
+
+  test(
+    'parses converter rows and cursor metadata from the catalogue response',
+    () {
+      final result = ConverterCatalogPage.fromJson(
+        {
+          'items': [
+            {
+              'id': 42,
+              'code_reference': 'ABC-42',
+              'converter_code': 420042,
+              'brand_id': 8,
+              'model': 'Swift',
+              'images': ['https://example.com/converter.png'],
+              'markings': ['86J C04'],
+              'monolith_weight_g': 750,
+              'pt_ppm': 400,
+            },
+          ],
+          'next_cursor': 41,
+          'has_more': true,
+          'page_size': 20,
+        },
+        brandsById: const {8: 'Suzuki'},
+      );
+
+      expect(result.hasMore, isTrue);
+      expect(result.nextCursor, '41');
+      expect(result.converters.single.id, 42);
+      expect(result.converters.single.converterCode, '420042');
+      expect(result.converters.single.brandName, 'Suzuki');
+      expect(result.converters.single.model, 'Swift');
+      expect(result.converters.single.images, [
+        'https://example.com/converter.png',
+      ]);
+    },
+  );
 
   test('catalog pages are reused until refresh or cache expiry', () {
     var now = DateTime(2026);
@@ -61,8 +67,8 @@ void main() {
     );
     const page = ConverterCatalogPage(
       converters: [ConverterRecord(id: 1, codeReference: 'CAT-1')],
-      total: 1,
-      page: 1,
+      hasMore: true,
+      nextCursor: '1',
       pageSize: 20,
     );
 
@@ -70,21 +76,22 @@ void main() {
       search: '',
       brandId: null,
       pageSize: 20,
+      cursor: null,
       revision: cache.revision(search: '', brandId: null, pageSize: 20),
       page: page,
     );
     expect(
-      cache.read(search: '', brandId: null, pageSize: 20, page: 1),
+      cache.read(search: '', brandId: null, pageSize: 20, cursor: null),
       same(page),
     );
     expect(
-      cache.read(search: 'marking', brandId: null, pageSize: 20, page: 1),
+      cache.read(search: 'marking', brandId: null, pageSize: 20, cursor: null),
       isNull,
     );
 
     cache.invalidate(search: '', brandId: null, pageSize: 20);
     expect(
-      cache.read(search: '', brandId: null, pageSize: 20, page: 1),
+      cache.read(search: '', brandId: null, pageSize: 20, cursor: null),
       isNull,
     );
 
@@ -92,15 +99,61 @@ void main() {
       search: '',
       brandId: null,
       pageSize: 20,
+      cursor: null,
       revision: cache.revision(search: '', brandId: null, pageSize: 20),
       page: page,
     );
     now = now.add(const Duration(minutes: 6));
     expect(
-      cache.read(search: '', brandId: null, pageSize: 20, page: 1),
+      cache.read(search: '', brandId: null, pageSize: 20, cursor: null),
       isNull,
     );
   });
+
+  test(
+    'the first catalogue page persists separately for each filter',
+    () async {
+      final preferences = await SharedPreferences.getInstance();
+      final cache = PersistentConverterCatalogCache(preferences: preferences);
+      const page = ConverterCatalogPage(
+        converters: [
+          ConverterRecord(
+            id: 42,
+            codeReference: 'ABC-42',
+            brandId: 8,
+            brandName: 'Suzuki',
+          ),
+        ],
+        hasMore: true,
+        nextCursor: '43',
+        pageSize: 20,
+      );
+
+      await cache.write(
+        search: 'catalyst',
+        brandId: 8,
+        pageSize: 20,
+        page: page,
+      );
+
+      final restored = await cache.read(
+        search: 'catalyst',
+        brandId: 8,
+        pageSize: 20,
+        brandsById: const {8: 'Suzuki'},
+      );
+      final anotherFilter = await cache.read(
+        search: 'catalyst',
+        brandId: 9,
+        pageSize: 20,
+        brandsById: const {},
+      );
+
+      expect(restored?.isFresh, isTrue);
+      expect(restored?.page.converters.single.codeReference, 'ABC-42');
+      expect(anotherFilter, isNull);
+    },
+  );
 
   test('converter mutations use the admin converter endpoints', () async {
     final apiClient = _FakeAuthenticatedApiClient(responseData: {});
@@ -171,16 +224,64 @@ void main() {
 
   test('converter API receives selected brand ID as brand_id', () async {
     final apiClient = _FakeAuthenticatedApiClient(
-      responseData: {'items': [], 'total': 0},
+      responseData: {
+        'items': [],
+        'next_cursor': null,
+        'has_more': false,
+        'page_size': 20,
+      },
     );
     final service = ConverterService(
       apiClient: apiClient,
       catalogCache: ConverterCatalogCache(),
     );
 
-    await service.getConverters(page: 1, brandId: 87, forceRefresh: true);
+    await service.getConverters(brandId: 87, forceRefresh: true);
 
     expect(apiClient.requestedQueryParameters.single['brand_id'], 87);
+  });
+
+  test('converter API uses cursor pagination and never sends page', () async {
+    final apiClient = _FakeAuthenticatedApiClient(
+      responseData: {
+        'items': [],
+        'next_cursor': null,
+        'has_more': false,
+        'page_size': 20,
+      },
+    );
+    final service = ConverterService(
+      apiClient: apiClient,
+      catalogCache: ConverterCatalogCache(),
+    );
+
+    await service.getConverters(
+      search: 'catalyst',
+      cursor: '43',
+      forceRefresh: true,
+    );
+
+    expect(apiClient.requestedQueryParameters.single, {
+      'page_size': 20,
+      'cursor': '43',
+      'search': 'catalyst',
+    });
+  });
+
+  test('converter API rejects invalid client-side search terms', () async {
+    final service = ConverterService(
+      apiClient: _FakeAuthenticatedApiClient(responseData: const {}),
+      catalogCache: ConverterCatalogCache(),
+    );
+
+    await expectLater(
+      service.getConverters(search: 'ab'),
+      throwsA(isA<ArgumentError>()),
+    );
+    await expectLater(
+      service.getConverters(search: List.filled(101, 'a').join()),
+      throwsA(isA<ArgumentError>()),
+    );
   });
 
   test('create and update reject more than four converter images', () async {
@@ -432,7 +533,7 @@ void main() {
     expect(marking.textAlign, TextAlign.left);
   });
 
-  testWidgets('catalog requests more pages and keeps the backend total', (
+  testWidgets('catalog requests more pages with the next cursor', (
     tester,
   ) async {
     final service = _FakeConverterService();
@@ -451,9 +552,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('40 converters'), findsOneWidget);
+    expect(find.text('20+ converters'), findsOneWidget);
     expect(find.text('CAT-1'), findsOneWidget);
-    expect(service.requestedPages, [1]);
+    expect(service.requestedCursors, [null]);
 
     for (var attempt = 0; attempt < 4; attempt++) {
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -1000));
@@ -462,12 +563,10 @@ void main() {
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -1000));
     await tester.pumpAndSettle();
 
-    expect(service.requestedPages, [1, 2]);
+    expect(service.requestedCursors, [null, '20']);
   });
 
-  testWidgets('catalog converter thumbnail uses enlarged size', (
-    tester,
-  ) async {
+  testWidgets('catalog converter thumbnail uses enlarged size', (tester) async {
     final service = _FakeConverterService();
     await tester.binding.setSurfaceSize(const Size(400, 800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -484,7 +583,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester.getSize(find.byKey(const ValueKey('catalog-converter-image')).first).width,
+      tester
+          .getSize(find.byKey(const ValueKey('catalog-converter-image')).first)
+          .width,
       128,
     );
   });
@@ -509,8 +610,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(service.queries.single.page, 1);
-    expect(find.text('40 converters'), findsOneWidget);
+    expect(service.queries.single.cursor, isNull);
+    expect(find.text('20+ converters'), findsOneWidget);
     expect(find.text('CAT-1'), findsOneWidget);
     expect(find.byKey(const ValueKey('catalog-add-converter')), findsNothing);
   });
@@ -571,7 +672,9 @@ void main() {
     expect(heroImage, findsOneWidget);
     expect(tester.getSize(heroImage).width, 400);
     expect(
-      tester.getSize(find.byKey(const ValueKey('converter-detail-image-hero'))).height,
+      tester
+          .getSize(find.byKey(const ValueKey('converter-detail-image-hero')))
+          .height,
       360,
     );
     expect(find.text('ID  AUTO-1'), findsOneWidget);
@@ -597,7 +700,6 @@ void main() {
       await tester.pumpAndSettle();
 
       for (final label in [
-        'Reference:',
         'Make:',
         'Model:',
         'Marking:',
@@ -607,15 +709,15 @@ void main() {
         expect(find.text(label), findsWidgets);
       }
 
-      await tester.enterText(find.byType(TextField), 'CAT 1');
+      await tester.enterText(find.byType(TextField), '86J C04');
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
-      expect(service.queries.last.search, 'CAT 1');
+      expect(service.queries.last.search, '86J C04');
 
       final matchingCodes = tester.widgetList<RichText>(
         find.byWidgetPredicate(
           (widget) =>
-              widget is RichText && widget.text.toPlainText() == 'CAT-1',
+              widget is RichText && widget.text.toPlainText() == '86J C04',
         ),
       );
       int yellowHighlightCount(InlineSpan span) {
@@ -704,7 +806,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Suzuki'));
+    await tester.tap(find.text('Suzuki').first);
     expect(selectedBrand?.id, 2);
   });
 
@@ -727,7 +829,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Suzuki'));
+    await tester.tap(find.text('Suzuki').first);
     await tester.pumpAndSettle();
     expect(service.queries.last.brandId, 2);
 
@@ -737,7 +839,7 @@ void main() {
 
     expect(service.queries.last.search, '86J C04');
     expect(service.queries.last.brandId, 2);
-    expect(service.queries.last.page, 1);
+    expect(service.queries.last.cursor, isNull);
     expect(find.text('2 converters'), findsOneWidget);
   });
 
@@ -768,9 +870,9 @@ void main() {
     expect(find.text('Markings'), findsOneWidget);
     expect(find.text('MARKINGS'), findsNothing);
     expect(find.text('1/2'), findsOneWidget);
-    expect(find.text('Pt'), findsOneWidget);
-    expect(find.text('Pd'), findsOneWidget);
-    expect(find.text('Rh'), findsOneWidget);
+    expect(find.text('PLATINUM'), findsOneWidget);
+    expect(find.text('PALLADIUM'), findsOneWidget);
+    expect(find.text('RHODIUM'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.chevron_right));
     await tester.pumpAndSettle();
     expect(find.text('2/2'), findsOneWidget);
@@ -794,23 +896,76 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Search'), findsOneWidget);
-    expect(find.text('CAT-1'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(service.queries, isEmpty);
+    expect(find.text('CAT-1'), findsNothing);
+    expect(find.text('40 converters'), findsNothing);
 
     await tester.enterText(find.byType(TextField), '86J C04');
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
     expect(service.queries.last.search, '86J C04');
-    expect(service.queries.last.page, 1);
+    expect(service.queries.last.cursor, isNull);
     expect(find.text('2 converters'), findsOneWidget);
+    expect(find.text('CAT-1'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), ' ');
+    await tester.pump();
+    expect(find.text('CAT-1'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(service.queries, hasLength(1));
+  });
+
+  testWidgets('short and overlong search terms do not call the catalogue API', (
+    tester,
+  ) async {
+    final service = _FakeConverterService();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SearchScreen(
+            converterService: service,
+            brandService: _FakeBrandService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'ab');
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(service.queries, isEmpty);
+    expect(find.text('Enter at least 3 characters to search.'), findsOneWidget);
+
+    await tester.enterText(
+      find.byType(TextField),
+      List.filled(101, 'a').join(),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(service.queries, isEmpty);
+    expect(
+      find.text('Search terms can be at most 100 characters.'),
+      findsOneWidget,
+    );
   });
 }
 
 class _FakeConverterService implements ConverterService {
-  final requestedPages = <int>[];
-  final queries = <({int page, String? search, int? brandId})>[];
+  final requestedCursors = <String?>[];
+  final queries = <({String? cursor, String? search, int? brandId})>[];
   final requestedDetails = <int>[];
   ConverterDraft? createdDraft;
+
+  @override
+  Future<CachedConverterCatalogPage?> getCachedFirstPage({
+    int pageSize = 20,
+    String? search,
+    int? brandId,
+    Map<int, String> brandsById = const {},
+  }) async => null;
 
   @override
   Future<String> uploadConverterImage({
@@ -835,17 +990,17 @@ class _FakeConverterService implements ConverterService {
 
   @override
   Future<ConverterCatalogPage> getConverters({
-    required int page,
     int pageSize = 20,
+    String? cursor,
     String? search,
     int? brandId,
     Map<int, String> brandsById = const {},
     bool forceRefresh = false,
   }) async {
-    requestedPages.add(page);
-    queries.add((page: page, search: search, brandId: brandId));
+    requestedCursors.add(cursor);
+    queries.add((cursor: cursor, search: search, brandId: brandId));
     final total = search == null || search.isEmpty ? 40 : 2;
-    final start = (page - 1) * pageSize;
+    final start = cursor == null ? 0 : int.parse(cursor);
     final count = (total - start).clamp(0, pageSize);
     final converters = List.generate(count, (index) {
       final id = start + index + 1;
@@ -863,10 +1018,9 @@ class _FakeConverterService implements ConverterService {
     });
     return ConverterCatalogPage(
       converters: converters,
-      total: total,
-      page: page,
+      hasMore: start + count < total,
+      nextCursor: start + count < total ? '${start + count}' : null,
       pageSize: pageSize,
-      totalPages: (total / pageSize).ceil(),
     );
   }
 
@@ -904,13 +1058,23 @@ class _FakeBrandService implements BrandService {
   final List<CarBrand>? converterBrands;
 
   @override
+  Future<List<CarBrand>?> getCachedConverterBrands() async => null;
+
+  @override
   Future<List<CarBrand>> getBrands({bool forceRefresh = false}) async =>
       const [];
 
   @override
   Future<List<CarBrand>> getConverterBrands({bool forceRefresh = false}) async {
     return converterBrands ??
-        const [CarBrand(id: 2, slug: 'suzuki', name: 'Suzuki', logoUrl: null)];
+        const [
+          CarBrand(
+            id: 2,
+            slug: 'suzuki',
+            name: 'Suzuki',
+            logoUrl: 'https://example.com/suzuki.png',
+          ),
+        ];
   }
 }
 
@@ -927,6 +1091,7 @@ class _FakeAuthenticatedApiClient implements AuthenticatedApiClient {
   Future<Response<dynamic>> get(
     String path, {
     Map<String, dynamic>? queryParameters,
+    Duration? receiveTimeout,
   }) async {
     requestedPaths.add(path);
     requestedQueryParameters.add(queryParameters ?? const {});

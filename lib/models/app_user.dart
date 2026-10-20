@@ -34,6 +34,15 @@ class AppUser {
   final String status;
   final bool isActive;
 
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'email': email,
+    'name': name,
+    'role': role,
+    'status': status,
+    'is_active': isActive,
+  };
+
   bool get isAdmin => role == 'admin' && isActive && status == 'approved';
 
   String get displayName => name.isEmpty ? email.split('@').first : name;
