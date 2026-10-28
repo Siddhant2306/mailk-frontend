@@ -98,7 +98,12 @@ class _BrandsScreenState extends State<BrandsScreen> {
 
   List<CarBrand> _displayBrands(Iterable<CarBrand> brands) {
     return brands
-        .where((brand) => brand.logoUrl?.trim().isNotEmpty == true)
+        // The backend's built-in Unknown brand intentionally has no logo, but
+        // it must remain visible so unclassified converters are discoverable.
+        .where(
+          (brand) =>
+              brand.logoUrl?.trim().isNotEmpty == true || brand.isUnknown,
+        )
         .toList()
       ..sort((first, second) {
         final countOrder = (second.converterCount ?? 0).compareTo(

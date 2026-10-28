@@ -1,5 +1,12 @@
 abstract final class ApiConfig {
-  static const String baseUrl = 'https://malik-backend-xhnr.onrender.com';
+  /// Set API_BASE_URL per environment with `--dart-define`.
+  ///
+  /// The production value is a safe fallback for distributable builds; local
+  /// and staging builds must override it instead of editing source code.
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://malik-backend-xhnr.onrender.com',
+  );
 
   /// Bounds API calls that gate authentication and catalogue actions.
   static const apiConnectTimeout = Duration(seconds: 10);

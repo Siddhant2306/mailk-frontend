@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_palette.dart';
 import '../../services/converter_import_parser.dart';
+import '../../services/converter_service.dart';
 
 class BulkImportSheet extends StatefulWidget {
-  const BulkImportSheet({super.key});
+  const BulkImportSheet({required this.converterService, super.key});
+
+  final ConverterService converterService;
 
   @override
   State<BulkImportSheet> createState() => _BulkImportSheetState();
@@ -16,9 +19,15 @@ class _BulkImportSheetState extends State<BulkImportSheet> {
   final _parser = ConverterImportParser();
   ConverterImportPreview? _preview;
   var _isPicking = false;
+  var _isImporting = false;
+  String? _submitError;
 
   Future<void> _chooseFile() async {
-    setState(() => _isPicking = true);
+    setState(() {
+      _isPicking = true;
+      _preview = null;
+      _submitError = null;
+    });
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -29,11 +38,44 @@ class _BulkImportSheetState extends State<BulkImportSheet> {
           ? null
           : result.files.first;
       if (file != null && mounted) {
-        setState(() => _preview = _parser.parse(file));
+        final preview = await _parser.parseAsync(file);
+        if (mounted) {
+          setState(() => _preview = preview);
+        }
       }
     } finally {
       if (mounted) {
         setState(() => _isPicking = false);
+      }
+    }
+  }
+
+  Future<void> _import() async {
+    final preview = _preview;
+    if (preview == null || !preview.isReady || _isImporting) {
+      return;
+    }
+
+    setState(() {
+      _isImporting = true;
+      _submitError = null;
+    });
+    try {
+      final ids = await widget.converterService.createConvertersBulk(
+        preview.rows,
+      );
+      if (mounted) {
+        Navigator.of(context).pop(ids.length);
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _submitError = widget.converterService.messageFor(error),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isImporting = false);
       }
     }
   }
@@ -99,7 +141,37 @@ class _BulkImportSheetState extends State<BulkImportSheet> {
               _PreviewCard(preview: _preview!),
             ],
             const SizedBox(height: 14),
-            const _BulkApiNotice(),
+            const _BulkImportNotice(),
+            if (_submitError != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _submitError!,
+                style: const TextStyle(color: AppColors.negative, fontSize: 12),
+              ),
+            ],
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton.icon(
+                onPressed:
+                    _preview?.isReady == true && !_isPicking && !_isImporting
+                    ? _import
+                    : null,
+                icon: _isImporting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.cloud_upload_outlined),
+                label: Text(
+                  _isImporting
+                      ? 'Importing…'
+                      : 'Import ${_preview?.rows.length ?? 0} converters',
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -160,8 +232,8 @@ class _PreviewCard extends StatelessWidget {
   }
 }
 
-class _BulkApiNotice extends StatelessWidget {
-  const _BulkApiNotice();
+class _BulkImportNotice extends StatelessWidget {
+  const _BulkImportNotice();
 
   @override
   Widget build(BuildContext context) {
@@ -181,7 +253,7 @@ class _BulkApiNotice extends StatelessWidget {
             SizedBox(width: 9),
             Expanded(
               child: Text(
-                'The file is validated locally. Import is disabled until the backend exposes a protected bulk converter endpoint.',
+                'Files are limited to 2 MB and 100 rows. The protected import is all-or-nothing: correct every row before submitting.',
                 style: TextStyle(
                   color: palette.textSecondary,
                   fontSize: 11,

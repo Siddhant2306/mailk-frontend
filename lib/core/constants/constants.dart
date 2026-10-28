@@ -4,6 +4,7 @@ class ApiConstants {
   static const String register = '/api/v1/auth/register';
   static const String currentUser = '/api/v1/auth/me';
   static const String converters = '/api/v1/admin/converters';
+  static const String bulkConverters = '$converters/bulk';
   static const String converterCatalog = '/api/v1/converters';
   static const String converterImageUpload = '/api/v1/uploads/converter-image';
   static const String adminUsers = '/api/v1/admin/users';

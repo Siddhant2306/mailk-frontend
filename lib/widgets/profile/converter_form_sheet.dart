@@ -11,6 +11,7 @@ import '../../models/car_brand.dart';
 import '../../models/converter_draft.dart';
 import '../../models/converter_record.dart';
 import '../../services/brand_service.dart';
+import '../../services/converter_image_validator.dart';
 import '../../services/converter_service.dart';
 
 class ConverterFormSheet extends StatefulWidget {
@@ -237,6 +238,7 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
         if (bytes == null) {
           throw const FormatException('The selected image could not be read.');
         }
+        ConverterImageValidator.validate(bytes: bytes, fileName: file.name);
         selectedImages.add(
           _FormConverterImage.pending(bytes: bytes, fileName: file.name),
         );
@@ -274,6 +276,7 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
       if (image == null || !mounted) return;
       final bytes = await image.readAsBytes();
       if (!mounted) return;
+      ConverterImageValidator.validate(bytes: bytes, fileName: image.name);
       setState(() {
         final selectedImage = _FormConverterImage.pending(
           bytes: bytes,
@@ -588,6 +591,9 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
                           return ListTile(
                             dense: true,
                             title: Text(brand.name),
+                            subtitle: brand.isUnknown
+                                ? const Text('Use when the make is not known')
+                                : null,
                             onTap: () => onSelected(brand),
                           );
                         },
@@ -1109,8 +1115,9 @@ class _ConverterFormSheetState extends State<ConverterFormSheet> {
 
   String? _numberValidator(String? value) {
     final text = value?.trim() ?? '';
-    if (text.isNotEmpty && double.tryParse(text) == null) {
-      return 'Use a number';
+    final number = double.tryParse(text);
+    if (text.isNotEmpty && (number == null || !number.isFinite || number < 0)) {
+      return 'Use a non-negative number';
     }
     return null;
   }

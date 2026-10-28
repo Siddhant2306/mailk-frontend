@@ -615,6 +615,10 @@ class _FakeConverterService implements ConverterService {
   Future<int> createConverter(ConverterDraft draft) async => 1;
 
   @override
+  Future<List<int>> createConvertersBulk(List<ConverterDraft> drafts) async =>
+      List<int>.generate(drafts.length, (index) => index + 1);
+
+  @override
   Future<void> updateConverter(int converterId, ConverterDraft draft) async {}
 
   @override

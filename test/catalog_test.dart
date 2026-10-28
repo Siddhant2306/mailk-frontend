@@ -1,7 +1,12 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:malik/core/theme/app_colors.dart';
 import 'package:malik/core/constants/constants.dart';
 import 'package:malik/models/car_brand.dart';
 import 'package:malik/models/converter_draft.dart';
@@ -12,6 +17,8 @@ import 'package:malik/screens/converter_detail_screen.dart';
 import 'package:malik/screens/search_screen.dart';
 import 'package:malik/services/brand_service.dart';
 import 'package:malik/services/converter_catalog_cache.dart';
+import 'package:malik/services/converter_image_validator.dart';
+import 'package:malik/services/converter_import_parser.dart';
 import 'package:malik/services/persistent_converter_catalog_cache.dart';
 import 'package:malik/services/converter_service.dart';
 import 'package:malik/services/authenticated_api_client.dart';
@@ -177,6 +184,70 @@ void main() {
     expect(apiClient.requestedMethods, ['PATCH', 'DELETE']);
     expect(apiClient.requestedData.single, draft.toJson(includeNulls: true));
   });
+
+  test('bulk converter import uses the protected atomic endpoint', () async {
+    final apiClient = _FakeAuthenticatedApiClient(
+      responseData: {
+        'converter_ids': [40, 41],
+        'count': 2,
+      },
+    );
+    final service = ConverterService(
+      apiClient: apiClient,
+      catalogCache: ConverterCatalogCache(),
+    );
+    const drafts = [
+      ConverterDraft(brandId: 8, codeReference: 'ABC-40'),
+      ConverterDraft(brandId: 8, codeReference: 'ABC-41'),
+    ];
+
+    final ids = await service.createConvertersBulk(drafts);
+
+    expect(ids, [40, 41]);
+    expect(apiClient.requestedPaths, [ApiConstants.bulkConverters]);
+    expect(apiClient.requestedMethods, ['POST']);
+    expect(apiClient.requestedData.single, {
+      'converters': [for (final draft in drafts) draft.toJson()],
+    });
+  });
+
+  test(
+    'image validation only accepts supported formats within the size limit',
+    () {
+      expect(
+        () => ConverterImageValidator.validate(
+          bytes: Uint8List.fromList([0xff, 0xd8, 0xff, 0x00]),
+          fileName: 'converter.jpg',
+        ),
+        returnsNormally,
+      );
+      expect(
+        () => ConverterImageValidator.validate(
+          bytes: Uint8List.fromList([0x00, 0x01]),
+          fileName: 'not-an-image.txt',
+        ),
+        throwsFormatException,
+      );
+    },
+  );
+
+  test(
+    'bulk parser rejects oversize files before attempting to parse them',
+    () {
+      final preview = ConverterImportParser().parse(
+        PlatformFile(
+          name: 'too-large.csv',
+          size: ConverterImportParser.maxFileBytes + 1,
+          bytes: Uint8List.fromList(
+            utf8.encode('brand_id,code_reference\n1,A'),
+          ),
+        ),
+      );
+
+      expect(preview.isReady, isFalse);
+      expect(preview.errors.single, 'Import files must be 2 MB or smaller.');
+    },
+  );
 
   test('converter brands use the authenticated API client', () async {
     final apiClient = _FakeAuthenticatedApiClient(
@@ -460,7 +531,7 @@ void main() {
                   id: 87,
                   slug: 'unknown',
                   name: 'Unknown',
-                  logoUrl: 'https://example.com/unknown.png',
+                  logoUrl: null,
                   converterCount: 7,
                 ),
               ],
@@ -649,7 +720,7 @@ void main() {
     expect(find.byTooltip('Delete converter'), findsOneWidget);
   });
 
-  testWidgets('converter detail image fills the hero with title overlaid', (
+  testWidgets('converter detail uses a full-bleed swipeable image hero', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(400, 900));
@@ -667,7 +738,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final heroImage = find.byWidgetPredicate(
-      (widget) => widget is Image && widget.fit == BoxFit.contain,
+      (widget) => widget is Image && widget.fit == BoxFit.cover,
     );
     expect(heroImage, findsOneWidget);
     expect(tester.getSize(heroImage).width, 400);
@@ -675,10 +746,32 @@ void main() {
       tester
           .getSize(find.byKey(const ValueKey('converter-detail-image-hero')))
           .height,
-      360,
+      336,
     );
+    expect(find.byType(PageView), findsOneWidget);
+    expect(find.byTooltip('Previous image'), findsNothing);
+    expect(find.byTooltip('Next image'), findsNothing);
     expect(find.text('ID  AUTO-1'), findsOneWidget);
     expect(find.text('Swift'), findsNWidgets(2));
+    expect(
+      tester.getTopLeft(find.text('ID  AUTO-1')).dy,
+      greaterThan(
+        tester
+            .getBottomLeft(
+              find.byKey(const ValueKey('converter-detail-image-hero')),
+            )
+            .dy,
+      ),
+    );
+    expect(find.text('1/2'), findsOneWidget);
+
+    await tester.drag(
+      find.byKey(const ValueKey('converter-detail-image-hero')),
+      const Offset(-250, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('2/2'), findsOneWidget);
   });
 
   testWidgets(
@@ -720,20 +813,18 @@ void main() {
               widget is RichText && widget.text.toPlainText() == '86J C04',
         ),
       );
-      int yellowHighlightCount(InlineSpan span) {
+      int goldHighlightCount(InlineSpan span) {
         if (span is! TextSpan) return 0;
-        return (span.style?.backgroundColor == const Color(0xFFFFE082)
-                ? 1
-                : 0) +
+        return (span.style?.backgroundColor == AppColors.accent ? 1 : 0) +
             (span.children?.fold<int>(
                   0,
-                  (count, child) => count + yellowHighlightCount(child),
+                  (count, child) => count + goldHighlightCount(child),
                 ) ??
                 0);
       }
 
       expect(
-        matchingCodes.any((text) => yellowHighlightCount(text.text) == 2),
+        matchingCodes.any((text) => goldHighlightCount(text.text) == 2),
         isTrue,
       );
     },
@@ -873,7 +964,11 @@ void main() {
     expect(find.text('PLATINUM'), findsOneWidget);
     expect(find.text('PALLADIUM'), findsOneWidget);
     expect(find.text('RHODIUM'), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.chevron_right));
+    expect(find.byTooltip('Next image'), findsNothing);
+    await tester.drag(
+      find.byKey(const ValueKey('converter-detail-image-hero')),
+      const Offset(-250, 0),
+    );
     await tester.pumpAndSettle();
     expect(find.text('2/2'), findsOneWidget);
   });
@@ -978,6 +1073,10 @@ class _FakeConverterService implements ConverterService {
     createdDraft = draft;
     return 0;
   }
+
+  @override
+  Future<List<int>> createConvertersBulk(List<ConverterDraft> drafts) async =>
+      List<int>.generate(drafts.length, (index) => index + 1);
 
   @override
   Future<void> updateConverter(int converterId, ConverterDraft draft) async {}
@@ -1103,7 +1202,15 @@ class _FakeAuthenticatedApiClient implements AuthenticatedApiClient {
 
   @override
   Future<Response<dynamic>> post(String path, {Object? data}) {
-    throw UnimplementedError();
+    requestedPaths.add(path);
+    requestedMethods.add('POST');
+    requestedData.add(data);
+    return Future.value(
+      Response<dynamic>(
+        requestOptions: RequestOptions(path: path),
+        data: responseData,
+      ),
+    );
   }
 
   @override

@@ -74,17 +74,18 @@ class _BrandLogo extends StatelessWidget {
       height: 58,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: palette.surfaceSubtle,
+        color: brand.isUnknown ? palette.accentSoft : palette.surfaceSubtle,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: palette.border),
       ),
       child: brand.logoUrl == null
-          ? _LogoFallback(name: brand.name)
+          ? _LogoFallback(isUnknown: brand.isUnknown, name: brand.name)
           : Image.network(
               brand.logoUrl!,
               fit: BoxFit.contain,
               filterQuality: FilterQuality.medium,
-              errorBuilder: (_, _, _) => _LogoFallback(name: brand.name),
+              errorBuilder: (_, _, _) =>
+                  _LogoFallback(isUnknown: brand.isUnknown, name: brand.name),
               loadingBuilder: (context, child, progress) {
                 if (progress == null) {
                   return child;
@@ -106,12 +107,18 @@ class _BrandLogo extends StatelessWidget {
 }
 
 class _LogoFallback extends StatelessWidget {
-  const _LogoFallback({required this.name});
+  const _LogoFallback({required this.name, required this.isUnknown});
 
   final String name;
+  final bool isUnknown;
 
   @override
   Widget build(BuildContext context) {
+    if (isUnknown) {
+      return const Center(
+        child: Icon(Icons.help_outline_rounded, color: AppColors.accent),
+      );
+    }
     return Center(
       child: Text(
         name.characters.first.toUpperCase(),

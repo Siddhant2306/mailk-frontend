@@ -45,14 +45,17 @@ class MarketChart extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Flexible(
-                    child: FittedBox(
+                  Expanded(
+                    child: Align(
                       alignment: Alignment.centerLeft,
-                      fit: BoxFit.scaleDown,
-                      child: _ChartTitle(isStale: isStale),
+                      child: FittedBox(
+                        alignment: Alignment.centerLeft,
+                        fit: BoxFit.scaleDown,
+                        child: _ChartTitle(isStale: isStale),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -92,16 +95,9 @@ class MarketChart extends StatelessWidget {
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerRight,
-                child: Wrap(
-                  spacing: 6,
-                  children: [
-                    for (final unit in PriceUnit.values)
-                      _UnitButton(
-                        unit: unit,
-                        isSelected: selectedUnit == unit,
-                        onPressed: () => onUnitChanged(unit),
-                      ),
-                  ],
+                child: _UnitSelector(
+                  selectedUnit: selectedUnit,
+                  onUnitChanged: onUnitChanged,
                 ),
               ),
             ],
@@ -122,6 +118,7 @@ class _ChartTitle extends StatelessWidget {
     final palette = AppPalette.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           'PGM MARKET',
@@ -180,31 +177,46 @@ class _MetalSelector extends StatelessWidget {
       button: true,
       selected: isSelected,
       label: '${metal.displayName} chart',
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(5),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: AppColors.metal(metal),
-                  shape: BoxShape.circle,
-                ),
-                child: const SizedBox(width: 7, height: 7),
+      child: Material(
+        color: Colors.transparent,
+        child: Ink(
+          decoration: BoxDecoration(
+            color: isSelected ? palette.accentSoft : palette.background,
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(
+              color: isSelected ? AppColors.metal(metal) : palette.border,
+            ),
+          ),
+          child: InkWell(
+            key: ValueKey('chart-metal-${metal.symbol}'),
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(7),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AppColors.metal(metal),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const SizedBox(width: 7, height: 7),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    metal.symbol,
+                    style: TextStyle(
+                      color: isSelected
+                          ? palette.textPrimary
+                          : palette.textMuted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 4),
-              Text(
-                metal.symbol,
-                style: TextStyle(
-                  color: isSelected ? palette.textPrimary : palette.textMuted,
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -285,8 +297,50 @@ class _DateRange extends StatelessWidget {
   }
 }
 
-class _UnitButton extends StatelessWidget {
-  const _UnitButton({
+class _UnitSelector extends StatelessWidget {
+  const _UnitSelector({
+    required this.selectedUnit,
+    required this.onUnitChanged,
+  });
+
+  final PriceUnit selectedUnit;
+  final ValueChanged<PriceUnit> onUnitChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    return Material(
+      color: palette.background,
+      borderRadius: BorderRadius.circular(7),
+      clipBehavior: Clip.antiAlias,
+      child: Ink(
+        decoration: BoxDecoration(
+          border: Border.all(color: palette.border),
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _UnitSegment(
+              unit: PriceUnit.inr,
+              isSelected: selectedUnit == PriceUnit.inr,
+              onPressed: () => onUnitChanged(PriceUnit.inr),
+            ),
+            Container(width: 1, height: 24, color: palette.border),
+            _UnitSegment(
+              unit: PriceUnit.usd,
+              isSelected: selectedUnit == PriceUnit.usd,
+              onPressed: () => onUnitChanged(PriceUnit.usd),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UnitSegment extends StatelessWidget {
+  const _UnitSegment({
     required this.unit,
     required this.isSelected,
     required this.onPressed,
@@ -303,24 +357,20 @@ class _UnitButton extends StatelessWidget {
       button: true,
       selected: isSelected,
       label: unit.chartLabel,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(6),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: isSelected ? palette.accent : palette.border,
-            ),
-          ),
-          child: Text(
-            unit.chartLabel,
-            style: TextStyle(
-              color: isSelected ? palette.accent : palette.textMuted,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
+      child: Ink(
+        color: isSelected ? palette.accentSoft : Colors.transparent,
+        child: InkWell(
+          key: ValueKey('chart-unit-${unit.name}'),
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Text(
+              unit.chartLabel,
+              style: TextStyle(
+                color: isSelected ? palette.accent : palette.textMuted,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),

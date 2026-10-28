@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_palette.dart';
 
 /// The shared catalogue search input used by the brand and global search tabs.
@@ -24,16 +23,12 @@ class CatalogSearchField extends StatelessWidget {
       child: TextField(
         controller: controller,
         onChanged: onChanged,
-        cursorColor: AppColors.accent,
+        cursorColor: Color.fromRGBO(255, 140, 0, 1),
         style: TextStyle(color: palette.textPrimary, fontSize: 12),
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: TextStyle(color: palette.textMuted, fontSize: 12),
-          prefixIcon: Icon(
-            Icons.search,
-            color: palette.textMuted,
-            size: 18,
-          ),
+          prefixIcon: Icon(Icons.search, color: palette.textMuted, size: 18),
           filled: true,
           fillColor: palette.input,
           contentPadding: const EdgeInsets.symmetric(horizontal: 12),
@@ -43,7 +38,10 @@ class CatalogSearchField extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(9),
-            borderSide: const BorderSide(color: AppColors.accent),
+            borderSide: const BorderSide(
+              color: Color.fromRGBO(255, 140, 0, 1),
+              width: 2,
+            ),
           ),
         ),
       ),

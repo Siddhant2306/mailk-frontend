@@ -13,8 +13,7 @@ class CarBrand {
       throw const FormatException('A brand is missing its name.');
     }
 
-    final rawSlug =
-        json['slug']?.toString() ?? json['external_id']?.toString();
+    final rawSlug = json['slug']?.toString() ?? json['external_id']?.toString();
     final slug = rawSlug == null || rawSlug.trim().isEmpty
         ? name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '-')
         : rawSlug.trim();
@@ -39,6 +38,10 @@ class CarBrand {
   final String slug;
   final String name;
   final String? logoUrl;
+
+  /// The backend seeds this brand for converters whose manufacturer is not
+  /// known yet. It deliberately has no logo.
+  bool get isUnknown => name.trim().toLowerCase() == 'unknown';
 
   Map<String, dynamic> toJson() => {
     if (id != null) 'id': id,

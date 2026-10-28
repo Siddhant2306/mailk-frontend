@@ -8,36 +8,50 @@ class DashboardHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
-    return Center(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Image.asset(
-            'assets/Logo.png',
-            width: 58,
-            height: 58,
-            fit: BoxFit.contain,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'MALIK ENTERPRISES',
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: palette.textPrimary,
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
+          SizedBox(
+            width: 52,
+            height: 52,
+            child: Image.asset(
+              'assets/Logo.png',
+              alignment: Alignment.topLeft,
+              fit: BoxFit.contain,
             ),
           ),
-          const SizedBox(height: 3),
-          Text(
-            'Catalytic Converter Reference Catalog',
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: palette.textMuted, fontSize: 12),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'MALIK ENTERPRISES',
+                    textAlign: TextAlign.left,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: palette.textPrimary,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Catalytic Converter Reference Catalog',
+                    textAlign: TextAlign.left,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: palette.textMuted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -46,11 +60,7 @@ class DashboardHeader extends StatelessWidget {
 }
 
 class QuickActions extends StatelessWidget {
-  const QuickActions({
-    super.key,
-    this.onSearchReference,
-    this.onBrowseBrands,
-  });
+  const QuickActions({super.key, this.onSearchReference, this.onBrowseBrands});
 
   final VoidCallback? onSearchReference;
   final VoidCallback? onBrowseBrands;
@@ -127,11 +137,7 @@ class QuickActionCard extends StatelessWidget {
                         color: palette.surfaceSubtle,
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Icon(
-                        icon,
-                        color: palette.accent,
-                        size: 27,
-                      ),
+                      child: Icon(icon, color: palette.accent, size: 27),
                     ),
                     const Spacer(),
                     Text(
@@ -148,10 +154,7 @@ class QuickActionCard extends StatelessWidget {
                       subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: palette.textMuted,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: palette.textMuted, fontSize: 12),
                     ),
                   ],
                 ),

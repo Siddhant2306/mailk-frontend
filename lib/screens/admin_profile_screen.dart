@@ -8,6 +8,7 @@ import '../models/pending_user.dart';
 import '../services/admin_user_service.dart';
 import '../services/brand_service.dart';
 import '../services/converter_service.dart';
+import '../services/session_cache.dart';
 import '../widgets/profile/admin_profile_sections.dart';
 import '../widgets/profile/bulk_import_sheet.dart';
 import '../widgets/profile/converter_form_sheet.dart';
@@ -76,18 +77,24 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
   }
 
   Future<void> _openBulkImport(BuildContext context) async {
-    await showModalBottomSheet<void>(
+    final importedCount = await showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppPalette.of(context).surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
-      builder: (_) => const BulkImportSheet(),
+      builder: (_) => BulkImportSheet(converterService: _converterService),
     );
+    if (importedCount != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$importedCount converters were imported.')),
+      );
+    }
   }
 
   Future<void> _signOut(BuildContext context) async {
+    await SessionCache().clear();
     await FirebaseAuth.instance.signOut();
     if (!context.mounted) return;
     Navigator.of(context).pushAndRemoveUntil(

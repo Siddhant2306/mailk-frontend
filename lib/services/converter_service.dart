@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import '../core/constants/constants.dart';
@@ -6,6 +8,7 @@ import '../models/converter_draft.dart';
 import 'authenticated_api_client.dart';
 import 'brand_service.dart';
 import 'converter_catalog_cache.dart';
+import 'converter_image_validator.dart';
 import 'persistent_converter_catalog_cache.dart';
 
 class ConverterService {
@@ -44,6 +47,10 @@ class ConverterService {
     required List<int> bytes,
     required String fileName,
   }) async {
+    ConverterImageValidator.validate(
+      bytes: Uint8List.fromList(bytes),
+      fileName: fileName,
+    );
     final response = await _apiClient.post(
       ApiConstants.converterImageUpload,
       data: FormData.fromMap({
@@ -59,7 +66,7 @@ class ConverterService {
   }
 
   Future<int> createConverter(ConverterDraft draft) async {
-    _validateImageCount(draft);
+    _validateDraft(draft);
     final response = await _apiClient.post(
       ApiConstants.converters,
       data: draft.toJson(),
@@ -75,7 +82,7 @@ class ConverterService {
   }
 
   Future<void> updateConverter(int converterId, ConverterDraft draft) async {
-    _validateImageCount(draft);
+    _validateDraft(draft);
     await _apiClient.patch(
       ApiConstants.adminConverterDetail(converterId),
       data: draft.toJson(includeNulls: true),
@@ -90,6 +97,38 @@ class ConverterService {
     _catalogCache.invalidateAll();
     await _persistentCatalogCache.invalidateAll();
     BrandService.invalidateConverterBrandsCache();
+  }
+
+  /// Atomically imports validated admin drafts. The backend either creates all
+  /// rows or rejects the entire batch with a row-level validation message.
+  Future<List<int>> createConvertersBulk(List<ConverterDraft> drafts) async {
+    if (drafts.isEmpty || drafts.length > 100) {
+      throw ArgumentError.value(
+        drafts.length,
+        'drafts',
+        'Import between 1 and 100 converters at a time.',
+      );
+    }
+    for (final draft in drafts) {
+      _validateDraft(draft);
+    }
+
+    final response = await _apiClient.post(
+      ApiConstants.bulkConverters,
+      data: {
+        'converters': [for (final draft in drafts) draft.toJson()],
+      },
+    );
+    final data = response.data;
+    final rawIds = data is Map ? data['converter_ids'] : null;
+    if (rawIds is! List || rawIds.any((id) => id is! int)) {
+      throw const FormatException('Invalid bulk-import response.');
+    }
+
+    _catalogCache.invalidateAll();
+    await _persistentCatalogCache.invalidateAll();
+    BrandService.invalidateConverterBrandsCache();
+    return List<int>.unmodifiable(rawIds.cast<int>());
   }
 
   Future<ConverterCatalogPage> getConverters({
@@ -262,7 +301,7 @@ class ConverterService {
       return 'A converter can have at most 4 images.';
     }
     if (error is FormatException) {
-      return 'The image service returned an invalid response. Please retry.';
+      return error.message.toString();
     }
     if (error is AuthenticationRequiredException) {
       return 'Please sign in again before saving or modifying a converter.';
@@ -280,9 +319,61 @@ class ConverterService {
     return 'Could not upload the image or save the converter. Please try again.';
   }
 
-  void _validateImageCount(ConverterDraft draft) {
+  void _validateDraft(ConverterDraft draft) {
+    if (draft.brandId <= 0) {
+      throw const FormatException('Choose a valid brand.');
+    }
     if (draft.images.length > 4) {
       throw const ConverterImageLimitException();
+    }
+    if (draft.markings.length > 25) {
+      throw const FormatException('A converter can have at most 25 markings.');
+    }
+    if (draft.markings.any(
+      (marking) => marking.trim().isEmpty || marking.length > 200,
+    )) {
+      throw const FormatException(
+        'Each marking must contain 1 to 200 characters.',
+      );
+    }
+    if (draft.images.any(
+      (image) => !image.startsWith('https://') || image.length > 500,
+    )) {
+      throw const FormatException(
+        'Each image must be an HTTPS URL up to 500 characters.',
+      );
+    }
+    if (draft.codeReference.trim().isEmpty ||
+        draft.codeReference.length > 150) {
+      throw const FormatException(
+        'A converter reference must be 1 to 150 characters.',
+      );
+    }
+    for (final value in [
+      draft.monolithWeightGrams,
+      draft.ptPpm,
+      draft.pdPpm,
+      draft.rhPpm,
+    ]) {
+      if (value != null && (!value.isFinite || value < 0)) {
+        throw const FormatException(
+          'Metal values and weight must be non-negative numbers.',
+        );
+      }
+    }
+    _validateOptionalText(draft.model, 'Model', 150);
+    _validateOptionalText(draft.converterType, 'Converter type', 100);
+    _validateOptionalText(draft.category, 'Category', 100);
+    _validateOptionalText(draft.localLingo, 'Local lingo', 200);
+    _validateOptionalText(draft.remarks, 'Remarks', 5000);
+    _validateOptionalText(draft.notes, 'Notes', 5000);
+  }
+
+  void _validateOptionalText(String? value, String label, int maximumLength) {
+    if (value != null && value.length > maximumLength) {
+      throw FormatException(
+        '$label must be at most $maximumLength characters.',
+      );
     }
   }
 }

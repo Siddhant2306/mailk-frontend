@@ -71,6 +71,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
 
       debugPrint('Firebase ID token received.');
+      print('Firebase ID token: $idToken');
 
       // ------------------------------------------------------------
       // 3. Register the user in our PostgreSQL database

@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/converter_draft.dart';
 
@@ -21,11 +21,30 @@ class ConverterImportPreview {
   bool get isReady => rows.isNotEmpty && errors.isEmpty;
 }
 
-/// Parses a CSV or XLSX file into the same draft model used by single entry.
-/// It deliberately does not submit rows: the backend currently exposes no
-/// atomic bulk-import API endpoint.
+/// Parses a bounded CSV or XLSX file into the same draft model used by single
+/// entry. Submission remains separate so invalid data never reaches the API.
 class ConverterImportParser {
+  static const maxFileBytes = 2 * 1024 * 1024;
+  static const maxRows = 100;
+
   ConverterImportPreview parse(PlatformFile file) {
+    final invalidPreview = _invalidPreview(file);
+    if (invalidPreview != null) return invalidPreview;
+    return _parse(file.name, file.bytes!);
+  }
+
+  /// Parses native files away from the UI isolate. The browser implementation
+  /// runs synchronously, but the strict file size limit keeps that work small.
+  Future<ConverterImportPreview> parseAsync(PlatformFile file) {
+    final invalidPreview = _invalidPreview(file);
+    if (invalidPreview != null) return Future.value(invalidPreview);
+    return compute(_parseImportFile, {
+      'fileName': file.name,
+      'bytes': file.bytes!,
+    });
+  }
+
+  ConverterImportPreview? _invalidPreview(PlatformFile file) {
     final bytes = file.bytes;
     if (bytes == null || bytes.isEmpty) {
       return ConverterImportPreview(
@@ -34,19 +53,29 @@ class ConverterImportParser {
         errors: const ['The selected file could not be read.'],
       );
     }
-
-    try {
-      final table = _readTable(file.name, bytes);
-      return _toPreview(file.name, table);
-    } on FormatException catch (error) {
+    if (file.size > maxFileBytes || bytes.length > maxFileBytes) {
       return ConverterImportPreview(
         fileName: file.name,
+        rows: const [],
+        errors: const ['Import files must be 2 MB or smaller.'],
+      );
+    }
+    return null;
+  }
+
+  ConverterImportPreview _parse(String fileName, Uint8List bytes) {
+    try {
+      final table = _readTable(fileName, bytes);
+      return _toPreview(fileName, table);
+    } on FormatException catch (error) {
+      return ConverterImportPreview(
+        fileName: fileName,
         rows: const [],
         errors: [error.message],
       );
     } on Object {
       return ConverterImportPreview(
-        fileName: file.name,
+        fileName: fileName,
         rows: const [],
         errors: const ['The file could not be parsed as CSV or XLSX.'],
       );
@@ -72,16 +101,20 @@ class ConverterImportParser {
     final sheet = workbook.tables.values.first;
     return sheet.rows
         .map(
-          (row) => row
-              .map((cell) => cell?.value?.toString().trim() ?? '')
-              .toList(),
+          (row) =>
+              row.map((cell) => cell?.value?.toString().trim() ?? '').toList(),
         )
         .toList();
   }
 
   ConverterImportPreview _toPreview(String fileName, List<List<String>> table) {
     if (table.length < 2) {
-      throw const FormatException('Include a header row and at least one record.');
+      throw const FormatException(
+        'Include a header row and at least one record.',
+      );
+    }
+    if (table.length - 1 > maxRows) {
+      throw const FormatException('Import no more than 100 rows at a time.');
     }
 
     final headers = table.first.map(_headerKey).toList();
@@ -110,17 +143,23 @@ class ConverterImportParser {
       }
     }
 
-    return ConverterImportPreview(fileName: fileName, rows: rows, errors: errors);
+    return ConverterImportPreview(
+      fileName: fileName,
+      rows: rows,
+      errors: errors,
+    );
   }
 
   ConverterDraft _draftFromRow(Map<String, String> row) {
     final brandId = int.tryParse(row['brand_id']?.trim() ?? '');
     final codeReference = row['code_reference']?.trim() ?? '';
-    if (brandId == null) {
-      throw const FormatException('brand_id must be a whole number.');
+    if (brandId == null || brandId <= 0) {
+      throw const FormatException('brand_id must be a positive whole number.');
     }
-    if (codeReference.isEmpty) {
-      throw const FormatException('code_reference is required.');
+    if (codeReference.isEmpty || codeReference.length > 150) {
+      throw const FormatException(
+        'code_reference must contain 1 to 150 characters.',
+      );
     }
 
     return ConverterDraft(
@@ -134,8 +173,8 @@ class ConverterImportParser {
       ptPpm: _number(row, 'pt_ppm'),
       pdPpm: _number(row, 'pd_ppm'),
       rhPpm: _number(row, 'rh_ppm'),
-      markings: _items(row['markings']),
-      images: _items(row['images']),
+      markings: _markings(row['markings']),
+      images: _images(row['images']),
       remarks: _optional(row['remarks']),
       notes: _optional(row['notes']),
     );
@@ -147,8 +186,8 @@ class ConverterImportParser {
       return null;
     }
     final number = double.tryParse(value);
-    if (number == null) {
-      throw FormatException('$key must be numeric.');
+    if (number == null || !number.isFinite || number < 0) {
+      throw FormatException('$key must be a non-negative number.');
     }
     return number;
   }
@@ -158,12 +197,36 @@ class ConverterImportParser {
     return trimmed.isEmpty ? null : trimmed;
   }
 
-  List<String> _items(String? value) {
-    return (value ?? '')
+  List<String> _markings(String? value) {
+    final items = _splitItems(value);
+    if (items.length > 25 || items.any((item) => item.length > 200)) {
+      throw const FormatException(
+        'A row can have at most 25 markings of up to 200 characters.',
+      );
+    }
+    return items;
+  }
+
+  List<String> _images(String? value) {
+    final items = _splitItems(value);
+    if (items.length > 4 ||
+        items.any(
+          (item) => !item.startsWith('https://') || item.length > 500,
+        )) {
+      throw const FormatException(
+        'A row can have at most 4 HTTPS image URLs of up to 500 characters.',
+      );
+    }
+    return items;
+  }
+
+  List<String> _splitItems(String? value) {
+    final items = (value ?? '')
         .split(RegExp(r'[|,;]'))
         .map((item) => item.trim())
         .where((item) => item.isNotEmpty)
         .toList();
+    return items;
   }
 
   String _headerKey(String header) {
@@ -173,4 +236,11 @@ class ConverterImportParser {
         .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
         .replaceAll(RegExp(r'^_|_$'), '');
   }
+}
+
+ConverterImportPreview _parseImportFile(Map<String, Object> input) {
+  return ConverterImportParser()._parse(
+    input['fileName']! as String,
+    input['bytes']! as Uint8List,
+  );
 }

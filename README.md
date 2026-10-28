@@ -8,12 +8,12 @@ Indian rupees per kilogram and US dollars per troy ounce.
 
 ```sh
 flutter pub get
-flutter run
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
 ```
 
-By default the app connects to `http://10.0.2.2:8000`, which is the Android
-emulator's host-machine loopback address. Start the API there for local Android
-development.
+The checked-in default is the deployed HTTPS API. Use `API_BASE_URL` to point a
+debug build at a local server; `10.0.2.2` is Android Emulator's host-machine
+loopback address.
 
 ## Market data cache
 
@@ -39,13 +39,18 @@ flutter analyze
 flutter test
 ```
 
+The backend must use `DEBUG=false`, a production database, and an explicit
+`CORS_ORIGINS` list for any browser client. Keep Firebase, database, Cloudinary
+and email credentials out of Git; configure them only in the deployment's
+secret store. The included request limiter is process-local, so production
+hosting should also enforce rate limits at its reverse proxy or API gateway.
+
 ### Android signing
 
-The repository deliberately does not use debug signing for release builds.
 Before publishing, replace `com.example.malik` in
 `android/app/build.gradle.kts` with an application ID registered to your
-organization, then create `android/key.properties` (this file is ignored by
-Git):
+organization, regenerate `google-services.json` for that ID, and create
+`android/key.properties` (this file is ignored by Git):
 
 ```properties
 storePassword=YOUR_STORE_PASSWORD

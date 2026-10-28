@@ -27,19 +27,13 @@ class BrandService {
           ),
         );
     return BrandService._(
-      dio: clientDio,
       apiClient: apiClient ?? AuthenticatedApiClient(dio: clientDio),
       cache: cache ?? BrandCache(),
     );
   }
 
-  BrandService._({
-    required this._dio,
-    required this._apiClient,
-    required this._cache,
-  });
+  BrandService._({required this._apiClient, required this._cache});
 
-  final Dio _dio;
   final AuthenticatedApiClient _apiClient;
   final BrandCache _cache;
 
@@ -69,7 +63,7 @@ class BrandService {
     }
 
     try {
-      final response = await _dio.get(ApiConstants.externalBrands);
+      final response = await _apiClient.get(ApiConstants.externalBrands);
       final brands = _parseBrands(response.data);
       await _cache.write(brands);
       return brands;

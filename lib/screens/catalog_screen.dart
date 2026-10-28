@@ -841,15 +841,14 @@ class _ConverterCard extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          code,
-                          style: const TextStyle(
-                            color: Color(0xFFFFB02E),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        _CatalogField(
+                          label: 'Code:',
+                          value: code,
+                          searchQuery: searchQuery,
+                          emphasized: true,
+                          valueColor: converter.converterCode.isNotEmpty
+                              ? palette.accent
+                              : palette.textPrimary,
                         ),
                         _CatalogField(
                           label: 'Make:',
@@ -896,15 +895,15 @@ class _CatalogField extends StatelessWidget {
     required this.label,
     required this.value,
     required this.searchQuery,
-    //this.valueColor,
-    //this.emphasized = false,
+    this.valueColor,
+    this.emphasized = false,
   });
 
   final String label;
   final String value;
   final String searchQuery;
-  //final Color? valueColor;
-  //final bool emphasized;
+  final Color? valueColor;
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
@@ -930,9 +929,9 @@ class _CatalogField extends StatelessWidget {
               value: value,
               query: searchQuery,
               style: TextStyle(
-                //color: valueColor ?? palette.textPrimary,
+                color: valueColor ?? palette.textPrimary,
                 fontSize: 12,
-                //fontWeight: emphasized ? FontWeight.w700 : FontWeight.w400,
+                fontWeight: emphasized ? FontWeight.w700 : FontWeight.w400,
               ),
             ),
           ),
@@ -1004,8 +1003,8 @@ class _HighlightedText extends StatelessWidget {
         TextSpan(
           text: value.substring(match.$1, match.$2),
           style: style.copyWith(
-            backgroundColor: const Color(0xFFFFE082),
-            color: const Color(0xFF29251A),
+            backgroundColor: AppColors.accent,
+            color: AppColors.background,
             fontWeight: FontWeight.w800,
           ),
         ),
