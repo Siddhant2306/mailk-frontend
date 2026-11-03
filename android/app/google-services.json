@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "883428592924",
+    "firebase_url": "https://gun-war-8484a.firebaseio.com",
+    "project_id": "gun-war-8484a",
+    "storage_bucket": "gun-war-8484a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:883428592924:android:5bc9aa6ab45c160fd57ed9",
+        "android_client_info": {
+          "package_name": "com.example.malik"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBvp09eh3lozwdS4Zr3FU2oCwj8jm8rLec"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

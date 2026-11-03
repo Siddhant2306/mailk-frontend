@@ -2,17 +2,22 @@ class MetalPrice {
   final int timestamp;
   final double price;
 
-  MetalPrice({
-    required this.timestamp,
-    required this.price,
-  });
+  MetalPrice({required this.timestamp, required this.price});
 
   factory MetalPrice.fromJson(Map<String, dynamic> json) {
-    return MetalPrice(
-      timestamp: json['timestamp'] as int,
-      price: (json['price'] as num).toDouble(),
-    );
+    final timestamp = _numberFromJson(json['timestamp'])?.toInt();
+    final price = _numberFromJson(json['price']);
+
+    if (timestamp == null || price == null) {
+      throw const FormatException(
+        'A price history entry is missing a timestamp or price.',
+      );
+    }
+
+    return MetalPrice(timestamp: timestamp, price: price);
   }
+
+  Map<String, dynamic> toJson() => {'timestamp': timestamp, 'price': price};
 
   // Metal Sentinel gives the price per troy ounce.
   static const double gramsPerTroyOunce = 31.1034768;
@@ -21,8 +26,14 @@ class MetalPrice {
   double get pricePerKilo {
     return (price / gramsPerTroyOunce) * 1000;
   }
-}
 
+  DateTime get recordedAt {
+    final milliseconds = timestamp.abs() >= 100000000000
+        ? timestamp
+        : timestamp * 1000;
+    return DateTime.fromMillisecondsSinceEpoch(milliseconds);
+  }
+}
 
 class MetalLivePrice {
   final String symbol;
@@ -44,19 +55,35 @@ class MetalLivePrice {
     this.changePercentage,
   });
 
-  factory MetalLivePrice.fromJson(Map<String, dynamic> json) {
+  factory MetalLivePrice.fromJson(
+    Map<String, dynamic> json, {
+    required String fallbackSymbol,
+    required String fallbackCurrency,
+  }) {
+    final symbol = json['symbol'] as String?;
+    final currency = json['currency'] as String?;
+    final price = _numberFromJson(json['price']);
+
+    if (price == null) {
+      throw const FormatException('A live metal quote is missing its price.');
+    }
+
     return MetalLivePrice(
-      symbol: json['symbol'],
-      currency: json['currency'],
-      price: (json['price'] as num).toDouble(),
-      change: json['change'] != null
-          ? (json['change'] as num).toDouble()
-          : null,
-      changePercentage: json['changePercentage'] != null
-          ? (json['changePercentage'] as num).toDouble()
-          : null,
+      symbol: symbol ?? fallbackSymbol,
+      currency: currency ?? fallbackCurrency,
+      price: price,
+      change: _numberFromJson(json['change']),
+      changePercentage: _numberFromJson(json['changePercentage']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'symbol': symbol,
+    'currency': currency,
+    'price': price,
+    'change': change,
+    'changePercentage': changePercentage,
+  };
 
   static const double gramsPerTroyOunce = 31.1034768;
 
@@ -74,4 +101,14 @@ class MetalLivePrice {
   double get priceInLakhsPerKilo {
     return pricePerKilo / 100000;
   }
+}
+
+double? _numberFromJson(dynamic value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  if (value is String) {
+    return double.tryParse(value);
+  }
+  return null;
 }
